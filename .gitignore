@@ -62,3 +62,13 @@ worker-configuration.d.ts
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Generated runtime data (should not be versioned)
+/uploads/
+/processed/
+/thumbnails/
+/server/uploads/
+/server/thumbnails/
+
+# Firebase emulator/exports
+/firebase-export-*/

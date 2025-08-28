@@ -1,0 +1,52 @@
+name: Deploy UI to Cloudflare Pages (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Cloudflare Pages project name'
+        required: true
+      branch:
+        description: 'Git branch to deploy'
+        required: true
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: true
+
+      - name: Build UI
+        working-directory: ui
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://example.com' }}
+        run: pnpm run build
+
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          projectName: ${{ github.event.inputs.project_name }}
+          directory: ui/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.event.inputs.branch }}
+

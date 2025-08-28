@@ -43,6 +43,9 @@ jobs:
           VITE_API_URL: http://localhost:5500
         run: pnpm -w run build
 
+      - name: Type-check Server
+        run: pnpm --filter server exec tsc --noEmit
+
       - name: Run Server tests
         run: pnpm --filter server test -- --run
 
