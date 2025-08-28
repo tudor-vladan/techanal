@@ -2,7 +2,7 @@
 
 O aplicație locală de analiză AI pentru trading charts care folosește computer vision și natural language processing pentru a analiza screenshot-uri de chart-uri și a genera semnale de trading bazate pe prompt-uri personalizate ale utilizatorului.
 
-## 🚀 Quick Start
+## 🚀 Quick Start [![CI](https://github.com/tudor-vladan/techanal/actions/workflows/grunt.yml/badge.svg)](https://github.com/tudor-vladan/techanal/actions/workflows/grunt.yml)
 
 ```bash
 # Clone repository
@@ -118,6 +118,34 @@ Note:
 - În development, rutele protejate acceptă `Authorization: Bearer <email>` (ex: `dev@example.com`).
 - Serverul comprimă automat răspunsurile (gzip/br) și aplică CORS strict controlat de `CORS_ORIGIN`.
 
+## ⚙️ CI/CD (GitHub Actions)
+
+Pipeline-ul de CI rulează automat la fiecare push/PR pe `main`:
+- Instalează dependințele cu pnpm
+- Build pentru UI (`ui/`)
+- Type-check pentru server (`server/`)
+- Publică artefactul `ui/dist` (download din pagina run-ului)
+
+Fișier workflow: `.github/workflows/ci.yml`.
+
+Rulare locală (echivalent minimal):
+```bash
+pnpm install
+pnpm -C ui run build
+pnpm -C server exec tsc -p tsconfig.json --noEmit
+```
+
+## 🏷️ Release v1.0.x
+
+1. Actualizează codul și documentația
+2. Creează tag:
+```bash
+git tag v1.0.x
+git push --tags
+```
+3. GitHub → Releases → “Create a new release” → selectează tag-ul și publică notele (changes, known issues, setup)
+
+
 ### **Servicii Docker**
 - **PostgreSQL**: Baza de date principală
 - **Server**: Backend Hono API
@@ -225,11 +253,11 @@ techAnal/
 # Start development
 pnpm run dev
 
-# Build production
-pnpm run build
+# Build & Test with Grunt (lint + typecheck + build + tests)
+pnpm run grunt
 
-# Run tests
-pnpm test
+# Doar build frontend
+pnpm --filter ui run build
 
 # Database migrations
 pnpm drizzle-kit generate

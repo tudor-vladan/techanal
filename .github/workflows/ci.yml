@@ -2,6 +2,55 @@ name: CI
 
 on:
   push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+
+      - name: Install dependencies (workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build UI
+        run: pnpm -C ui run build
+
+      - name: Type-check server
+        run: pnpm -C server exec tsc -p tsconfig.json --noEmit
+
+      - name: Run server tests (if present)
+        run: pnpm -C server run test --if-present
+
+      - name: Upload UI dist
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist
+          path: ui/dist
+name: CI
+
+on:
+  push:
     branches: ["main"]
   pull_request:
     branches: ["main"]

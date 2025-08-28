@@ -664,13 +664,13 @@ pnpm drizzle-kit drop
 1. **Build Frontend**
    ```bash
    cd ui
-   pnpm build
+   pnpm --filter ui run build
    ```
 
 2. **Build Backend**
    ```bash
    cd server
-   pnpm build
+   pnpm --filter server run test
    ```
 
 3. **Docker Production Build**

@@ -175,8 +175,8 @@ docker-compose up -d
 
 ### Production
 ```bash
-# Build production
-pnpm run build
+# Build & Test (lint + typecheck + build + tests)
+pnpm run grunt
 
 # Docker production
 docker-compose -f docker-compose.prod.yml up -d

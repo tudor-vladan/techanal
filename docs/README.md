@@ -69,8 +69,8 @@ node scripts/update-progress.js "Feature Name" status
 # Start development environment
 pnpm run dev
 
-# Build production
-pnpm run build
+# Build & Test (CI local: lint + typecheck + build + tests)
+pnpm run grunt
 
 # Run tests
 pnpm test
