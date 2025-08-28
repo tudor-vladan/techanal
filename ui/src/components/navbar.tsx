@@ -20,7 +20,7 @@ export function Navbar() {
       <div className="flex items-center gap-3 ml-auto">
         {user && (
           <span className="text-sm">
-            Welcome, {user.displayName || user.email}
+            Welcome, {user.email}
           </span>
         )}
         <ModeToggle />

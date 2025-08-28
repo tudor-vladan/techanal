@@ -25,7 +25,18 @@ const { port, apiUrl, firebaseAuthPort, useFirebaseEmulator } = parseCliArgs();
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: port
+    port: port,
+    host: '0.0.0.0',
+    // Proxy API requests during local development so visiting
+    // http://localhost:<ui-port>/api/... hits the backend server
+    proxy: {
+      '/api': {
+        target: apiUrl,
+        changeOrigin: true,
+        // keep the /api prefix as-is; backend expects it
+        // no path rewrite needed
+      }
+    }
   },
   define: {
     'import.meta.env.VITE_API_URL': `"${apiUrl}"`,

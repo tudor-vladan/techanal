@@ -2,7 +2,14 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { drizzle as createDrizzlePostgres } from 'drizzle-orm/postgres-js';
 import { neon } from '@neondatabase/serverless';
 import postgres from 'postgres';
-import * as schema from '../schema/users';
+import * as userSchema from '../schema/users';
+import * as analysisSchema from '../schema/analysis';
+
+// Combine all schemas
+const schema = {
+  ...userSchema,
+  ...analysisSchema,
+};
 
 type DatabaseConnection = ReturnType<typeof drizzle> | ReturnType<typeof createDrizzlePostgres>;
 
@@ -24,7 +31,11 @@ const createConnection = async (connectionString: string): Promise<DatabaseConne
     max: 1,
     idle_timeout: 20,
     max_lifetime: 60 * 30,
+    onnotice: () => {}, // Suppress notices
   });
+
+  // Set search_path to include 'app' schema
+  await client`SET search_path TO app, public`;
 
   return createDrizzlePostgres(client, { schema });
 };

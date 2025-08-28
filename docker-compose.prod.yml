@@ -1,0 +1,306 @@
+version: '3.8'
+
+services:
+  # Production PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: techanal-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: techanal_prod
+      POSTGRES_USER: techanal_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_prod_password_2024}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U techanal_user -d techanal_prod"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - techanal_prod_network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Production Backend Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.prod
+      args:
+        NODE_ENV: production
+    container_name: techanal-server-prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8787
+      DATABASE_URL: postgresql://techanal_user:${POSTGRES_PASSWORD:-secure_prod_password_2024}@postgres:5432/techanal_prod
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-techanal-prod}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      JWT_SECRET: ${JWT_SECRET:-secure_jwt_secret_prod_2024}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://techanal.com}
+      LOG_LEVEL: info
+      PERFORMANCE_MONITORING: true
+      CACHE_ENABLED: true
+      CACHE_TTL: 3600
+      CACHE_MAX_SIZE: 1000
+      AI_ENGINE_TIMEOUT: 30000
+      MAX_FILE_SIZE: 10485760
+      UPLOAD_DIR: /app/uploads
+      THUMBNAIL_DIR: /app/thumbnails
+      PROCESSED_DIR: /app/processed
+    ports:
+      - "8787:8787"
+    volumes:
+      - server_uploads:/app/uploads
+      - server_thumbnails:/app/thumbnails
+      - server_processed:/app/processed
+      - server_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - techanal_prod_network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Production Frontend UI
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.prod
+      args:
+        NODE_ENV: production
+    container_name: techanal-ui-prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8787}
+      VITE_APP_NAME: TechAnal Pro
+      VITE_APP_VERSION: 2.0.0
+      VITE_ENVIRONMENT: production
+      VITE_ANALYTICS_ENABLED: true
+      VITE_ERROR_REPORTING: true
+      VITE_PERFORMANCE_MONITORING: true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ui_logs:/var/log/nginx
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - techanal_prod_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Production Redis Cache (Optional - for advanced caching)
+  redis:
+    image: redis:7-alpine
+    container_name: techanal-redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - techanal_prod_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Production Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: techanal-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      - ui
+      - server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - techanal_prod_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Production Monitoring Stack
+  monitoring:
+    image: prom/prometheus:latest
+    container_name: techanal-monitoring-prod
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - monitoring_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - techanal_prod_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Production Log Aggregation
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: techanal-logstash-prod
+    restart: unless-stopped
+    environment:
+      LS_JAVA_OPTS: "-Xmx512m -Xms512m"
+    volumes:
+      - ./monitoring/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - logstash_data:/usr/share/logstash/data
+    ports:
+      - "5044:5044"
+    networks:
+      - techanal_prod_network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres/prod
+  server_uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/uploads/prod
+  server_thumbnails:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/thumbnails/prod
+  server_processed:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/processed/prod
+  server_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs/server/prod
+  ui_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs/ui/prod
+  nginx_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs/nginx/prod
+  nginx_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/cache/nginx/prod
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis/prod
+  monitoring_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/monitoring/prod
+  logstash_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logstash/prod
+
+networks:
+  techanal_prod_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

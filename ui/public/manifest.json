@@ -1,0 +1,158 @@
+{
+  "name": "TechAnal - AI Trading Analysis Platform",
+  "short_name": "TechAnal",
+  "description": "Platformă avansată de analiză trading cu AI, Model Fine-tuning și System Monitoring",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "ro",
+  "categories": ["finance", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Trading Analysis",
+      "short_name": "Analysis",
+      "description": "Analiză AI pentru screenshot-uri de trading",
+      "url": "/trading-analysis",
+      "icons": [
+        {
+          "src": "/logo192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "AI Management",
+      "short_name": "AI",
+      "description": "Management provider AI și configurare",
+      "url": "/ai-management",
+      "icons": [
+        {
+          "src": "/logo192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "System Monitor",
+      "short_name": "Monitor",
+      "description": "Monitorizare sistem și performanță",
+      "url": "/system-monitor",
+      "icons": [
+        {
+          "src": "/logo192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Model Management",
+      "short_name": "Models",
+      "description": "Fine-tuning și management modele AI",
+      "url": "/model-management",
+      "icons": [
+        {
+          "src": "/logo192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Trading Analysis Dashboard"
+    },
+    {
+      "src": "/screenshot2.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "AI Management Interface"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+techanal",
+      "url": "/?action=%s"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/trading-analysis",
+      "accept": {
+        "image/*": [".png", ".jpg", ".jpeg"]
+      }
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": ["image/*"]
+        }
+      ]
+    }
+  },
+  "permissions": [
+    "notifications",
+    "background-sync",
+    "storage",
+    "camera",
+    "microphone"
+  ],
+  "features": [
+    "Cross Platform",
+    "fast",
+    "simple",
+    "AI Powered",
+    "Offline Support",
+    "Push Notifications"
+  ]
+}

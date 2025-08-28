@@ -1,330 +1,278 @@
-# Your Volo App
+# TechAnal - AI Trading Analysis Application
 
-Welcome to your new full-stack application! This project was created with `create-volo-app` and comes pre-configured with a modern tech stack and production-ready architecture.
+O aplicație locală de analiză AI pentru trading charts care folosește computer vision și natural language processing pentru a analiza screenshot-uri de chart-uri și a genera semnale de trading bazate pe prompt-uri personalizate ale utilizatorului.
 
-## 🎯 **Philosophy**
-
-This application provides a highly opinionated, production-ready foundation for building full-stack applications with a decoupled frontend and backend. It's designed to maximize development velocity while adhering to best practices, including clear separation of concerns and secure handling of sensitive credentials.
-
-Many boilerplates offer a rapid 'hello world' experience for local development but often defer critical decisions about authentication, database integration, and production deployment. This template takes a different approach. We believe that the complexities of a true full-stack application - setting up auth, a database, and distinct hosting for UI and API - are largely unavoidable for production use. By addressing these components comprehensively from the start, this template aims to provide a clearer, more predictable path to a robust, deployable application, minimizing 'surprise' hurdles down the line and fostering a deeper understanding of the full stack architecture.
-
-Start with everything running locally on your machine, then progressively connect to production services when you're ready or dive in and connect them all at app creation.
-
-## 🚀 **What You Have**
-
-
-**Frontend:**
-- ⚛️ React + TypeScript + Vite
-- 🎨 Tailwind CSS + ShadCN components
-- 🔐 Firebase Authentication (Google Sign-In)
-
-**Backend:**
-- 🔥 Hono API backend (NodeJS)
-- 🗄️ PostgreSQL with Drizzle ORM
-- 🔑 Firebase Admin SDK
-
-**Local Development (Default):**
-- ⚡ Runs UI + Server + DB + Auth on your computer
-- 🏠 Embedded PostgreSQL database
-- 🔧 Firebase Auth emulator
-- ✅ Zero sign-ins or accounts needed
-
-**Production (when connected):**
-- 🌐 Cloudflare Pages + Workers deployment ready
-- 🗄️ Neon, Supabase, or custom PostgreSQL
-- 🔐 Production Firebase Auth
-
-## 🛠️ **Development**
-
-Start both frontend and backend (with embedded PostgreSQL database and Firebase emulator):
+## 🚀 Quick Start
 
 ```bash
+# Clone repository
+git clone <repository-url>
+cd techAnal
+
+# Install dependencies
+pnpm install
+
+# Setup environment
+cp ui/src/lib/firebase-config.template.json ui/src/lib/firebase-config.json
+# Edit firebase-config.json cu credențialele tale
+
+# Start development environment
 pnpm run dev
 ```
 
-This automatically assigns available ports and displays them on startup:
-- **Frontend**: Usually `http://localhost:5173` (or next available)
-- **Backend API**: Usually `http://localhost:8787` (or next available)
-- **PostgreSQL**: Embedded database on dynamic port (starts from 5433)
+## 🐳 Docker Deployment
 
-The system handles port conflicts automatically. For multiple projects, use separate folders.
+> 📖 **Ghid Complet Docker**: [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md)
 
-> **📋 Port Management**: See [`docs/PORT_HANDLING.md`](docs/PORT_HANDLING.md) for details on running multiple instances and port conflict resolution.
+### **Quick Start cu Docker**
+```bash
+# Pornește aplicația completă cu Docker
+make dev
 
-### Individual Commands
+# Sau folosind scriptul direct
+./scripts/docker-start.sh
+```
+
+### 🔎 Smoke Test (Docker)
+```bash
+# 1) UI
+open http://localhost:5501
+
+# 2) API Health
+curl http://localhost:5500/api/v1/health
+
+# 3) Protected AI Stats (dev token = email)
+curl -H "Authorization: Bearer dev@example.com" http://localhost:5500/api/v1/protected/ai-engine-stats
+
+# 4) Analyze (folosește un PNG existent)
+curl -X POST -H "Authorization: Bearer dev@example.com" \
+  -F "image=@./test-image.png" \
+  -F "prompt=Analizeaza nivelurile cheie si recomandari." \
+  http://localhost:5500/api/v1/protected/analyze-screenshot
+
+# 5) History
+curl -H "Authorization: Bearer dev@example.com" http://localhost:5500/api/v1/protected/analysis-history
+
+# 6) Imagine încărcată
+# Deschide în browser: http://localhost:5500/api/v1/uploads/<filename>
+```
+
+#### Teste suplimentare (Public)
+```bash
+# AI Engine – test rapid de performanță sintetica
+curl http://localhost:5500/api/v1/ai-performance-test | jq .
+
+# Chart analysis demo (mock)
+curl http://localhost:5500/api/v1/chart-analysis-test | jq .
+
+# Test integrare completă (db + ai + perf)
+curl http://localhost:5500/api/v1/integration-test | jq .
+
+# Benchmark end-to-end al motorului AI
+curl http://localhost:5500/api/v1/ai-engine-performance | jq .
+```
+
+### **Comenzi Docker Utile**
+```bash
+# Development
+make dev              # Pornește în development
+make dev-build        # Construiește și pornește
+make stop             # Oprește toate containerele
+make logs             # Afișează log-urile
+make status           # Statusul serviciilor
+
+# Production
+make prod             # Pornește în producție
+make prod-build       # Construiește și pornește în producție
+make clean            # Oprește și șterge tot
+
+# Ajutor
+make help             # Afișează toate comenzile
+```
+
+### **Porturi Docker**
+- **Frontend (UI)**: http://localhost:5501
+- **Backend (API)**: http://localhost:5500
+- **Database**: localhost:5502
+- **Firebase Auth**: http://localhost:5503 / UI: http://localhost:5504
+
+### **Configurare Variabile de Mediu**
+```bash
+# Copiază template-ul
+cp env.example .env
+
+# Editează .env cu valorile tale
+nano .env
+```
+
+Chei relevante:
+```bash
+# UI
+VITE_API_URL=http://localhost:5500          # Recomandat pentru UI (în prod: https://domeniul-tau)
+
+# Server
+CORS_ORIGIN=http://localhost:5501            # În prod: https://domeniul-tau (evită '*')
+MAX_FILE_SIZE=10485760                       # Limită upload (bytes) – implicit 10MB
+```
+Note:
+- În development, rutele protejate acceptă `Authorization: Bearer <email>` (ex: `dev@example.com`).
+- Serverul comprimă automat răspunsurile (gzip/br) și aplică CORS strict controlat de `CORS_ORIGIN`.
+
+### **Servicii Docker**
+- **PostgreSQL**: Baza de date principală
+- **Server**: Backend Hono API
+- **UI**: Frontend React + Vite
+- **Firebase**: Emulator pentru autentificare
+
+## 📚 Documentație Completă
+
+### **📋 Pentru Dezvoltatori Noi**
+- **[docs/README.md](docs/README.md)** - Structura documentației și cum să o folosești
+- **[docs/HOW_TO_USE.md](docs/HOW_TO_USE.md)** - Ghid pas cu pas pentru utilizarea documentației
+- **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Workflow complet de dezvoltare
+
+### **📊 Pentru Monitorizarea Progresului**
+- **[docs/DEVELOPMENT_PROGRESS.md](docs/DEVELOPMENT_PROGRESS.md)** - Planul de dezvoltare cu status-ul actual al fiecărei funcționalități
+- **[docs/SUMMARY.md](docs/SUMMARY.md)** - Sumar complet al documentației și status-ului proiectului
+
+### **🏗️ Pentru Arhitectura și Implementare**
+- **[docs/APPLICATION_DOCUMENTATION.md](docs/APPLICATION_DOCUMENTATION.md)** - Documentația tehnică completă (API, schema, componente)
+- **[docs/API_REFERENCE.md](docs/API_REFERENCE.md)** - Referință completă API (v1 + system)
+- **[docs/PRODUCT_BRIEF.md](docs/PRODUCT_BRIEF.md)** - Specificațiile produsului
+- **[docs/TRADING_APP_CONSTRUCTION_PLAN.md](docs/TRADING_APP_CONSTRUCTION_PLAN.md)** - Planul original de construcție
+
+## 🔧 Scripturi Utile
+
+### **Actualizare Progres Dezvoltare**
+```bash
+# Marchează o funcționalitate ca completă
+node scripts/update-progress.js "Feature Name" complete
+
+# Marchează o funcționalitate ca în curs
+node scripts/update-progress.js "Feature Name" in-progress
+
+# Vezi ajutorul
+node scripts/update-progress.js --help
+```
+
+### **Status-uri Disponibile**
+- `complete` → ✅ COMPLET
+- `in-progress` → 🔄 ÎN CURS
+- `started` → 🟡 ÎNCEPUT
+- `planned` → ❌ ÎN AȘTEPTARE
+- `testing` → 🧪 ÎN TESTARE
+- `deployed` → 🚀 DEPLOYAT
+
+## 📊 Status Actual al Proiectului
+
+**Status General**: 80% complet
+
+### ✅ **Complet Implementat (Faza 1-2)**
+- Infrastructure și setup
+- Database schema și API endpoints
+- Authentication system
+- Basic image processing
+- Frontend UI components
+- Docker deployment
+
+### 🔄 **În Curs de Dezvoltare (Faza 3)**
+- Integration Testing pentru AI Analysis Engine
+- Performance Optimization
+- User Testing
+- Production Deployment
+
+### ❌ **Planificat (Faza 4-6)**
+- AI Models training
+- Advanced analytics
+- Performance optimization
+- Production deployment
+
+**Următoarea Milă**: Integration Testing și Performance Optimization pentru AI Analysis Engine
+
+## 🏗️ Arhitectura
+
+```
+techAnal/
+├── ui/                    # Frontend React + Vite + Tailwind + ShadCN
+├── server/                # Backend Hono API + Drizzle ORM
+├── database-server/       # Embedded PostgreSQL
+├── docs/                  # Documentație completă
+└── scripts/               # Scripturi utilitare
+```
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React 18, Vite, Tailwind CSS, ShadCN
+- **Backend**: Node.js, Hono, Drizzle ORM
+- **Database**: PostgreSQL
+- **Authentication**: Firebase Auth
+- **Deployment**: Docker, Docker Compose
+- **Package Manager**: pnpm
+
+## 🎯 Funcționalități Cheie
+
+- **Local AI Processing**: Toate datele rămân pe computerul utilizatorului
+- **Custom Prompt Engine**: Criterii de analiză personalizate
+- **Multi-Asset Support**: Forex, stocks, commodities, crypto
+- **Real-time Analysis**: Răspuns în sub 2 secunde
+- **Pattern Recognition**: Detectare automată de pattern-uri tehnice
+- **Signal Generation**: Recomandări Buy/Sell/Hold cu niveluri de încredere
+- **System Monitoring**: Monitorizare în timp real a proceselor și resurselor
+
+## 🚀 Development
 
 ```bash
-# Frontend only
-cd ui && pnpm dev
+# Start development
+pnpm run dev
 
-# Backend only  
-cd server && pnpm dev
+# Build production
+pnpm run build
 
-# Build frontend
-cd ui && pnpm build
+# Run tests
+pnpm test
 
-# Deploy backend (requires production setup)
-cd server && pnpm run deploy
+# Database migrations
+pnpm drizzle-kit generate
+pnpm drizzle-kit migrate
 ```
 
-## 🔗 **Connecting Production Services**
+## 📝 Contribuția
 
-Your app defaults to everything running locally. Connect to production services when you're ready:
+### **Pentru Dezvoltatori Noi**
+1. Citește **[docs/HOW_TO_USE.md](docs/HOW_TO_USE.md)** pentru ghidul complet
+2. Verifică **[docs/DEVELOPMENT_PROGRESS.md](docs/DEVELOPMENT_PROGRESS.md)** pentru status-ul actual
+3. Explorează **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** pentru workflow-ul de dezvoltare
+4. Vezi **[docs/SYSTEM_MONITOR_DOCUMENTATION.md](docs/SYSTEM_MONITOR_DOCUMENTATION.md)** pentru monitorizarea sistemului
 
-### Connect Production Database
+### **Pentru Actualizarea Progresului**
 ```bash
-# Choose from available providers
-pnpm connect:database
-
-# Or connect to specific provider
-pnpm connect:database:neon      # Neon PostgreSQL
-pnpm connect:database:supabase  # Supabase PostgreSQL
-pnpm connect:database:custom    # Custom PostgreSQL
+# Când implementezi o funcționalitate nouă
+node scripts/update-progress.js "Nume Funcționalitate" complete
 ```
 
-### Connect Production Authentication
-```bash
-# Set up production Firebase Auth
-pnpm connect:auth
-```
+## 🔍 Troubleshooting
 
-### Connect Production Deployment
-```bash
-# Set up Cloudflare Workers + Pages deployment
-pnpm connect:deploy
-```
+Pentru probleme comune și soluții, verifică:
+- **[docs/HOW_TO_USE.md](docs/HOW_TO_USE.md)** - Secțiunea Troubleshooting
+- **[docs/APPLICATION_DOCUMENTATION.md](docs/APPLICATION_DOCUMENTATION.md)** - Secțiunea Troubleshooting
+- **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Secțiunea Debugging
 
-### Check Connection Status
-```bash
-# See what's connected to production vs local
-pnpm connection:status
-```
+## 📞 Suport
 
-**What happens when you connect services:**
-- Your `.env` files are automatically updated
-- A backup of your current config is created
-- You can always revert to local development by restoring the backup
+Pentru întrebări despre:
+- **Documentație**: Verifică mai întâi folderul `docs/`
+- **Implementare**: Citește `docs/APPLICATION_DOCUMENTATION.md`
+- **Progres**: Verifică `docs/DEVELOPMENT_PROGRESS.md`
+- **Workflow**: Citește `docs/DEVELOPER_GUIDE.md`
 
-## 📁 **Project Structure**
+## 📄 License
 
-```
-├── ui/                    # React frontend
-│   ├── src/
-│   │   ├── components/    # UI components (ShadCN)
-│   │   ├── lib/          # Utilities & Firebase config
-│   │   └── App.tsx       # Main app component
-│   └── package.json
-├── server/               # Hono API backend
-│   ├── src/
-│   │   ├── middleware/   # Auth & other middleware
-│   │   ├── schema/       # Database schema (Drizzle)
-│   │   └── index.ts      # API routes
-│   ├── wrangler.toml     # Cloudflare Worker config (when connected)
-│   ├── .env              # Your environmental variables
-│   └── package.json
-├── data/                 # Local development data
-│   ├── postgres/         # Embedded PostgreSQL data
-│   └── firebase-emulator/ # Firebase emulator data (auto-backed up)
-└── scripts/
-    ├── post-setup.js     # Setup automation
-    ├── run-dev.js        # Development server runner
-    └── periodic-emulator-backup.js # Firebase data backup (runs automatically)
-```
-
-## 🔧 **Customization**
-
-### Adding API Routes
-
-Edit `server/src/index.ts`:
-
-```typescript
-// Add to the existing api router
-api.get('/your-route', (c) => {
-  return c.json({ message: 'Hello!' });
-});
-
-// For protected routes, add to protectedRoutes:
-protectedRoutes.get('/private-route', (c) => {
-  const user = c.get('user'); // Get authenticated user
-  return c.json({ user });
-});
-```
-
-### Database Changes
-
-1. Edit schema in `server/src/schema/`
-2. Push changes: `cd server && pnpm db:push`
-
-### UI Components
-
-- Add components in `ui/src/components/`
-- Use ShadCN/UI: Browse components at [ui.shadcn.com](https://ui.shadcn.com)
-- Install new components: `cd ui && npx shadcn-ui@latest add [component]`
-
-### Styling
-
-- Modify `ui/tailwind.config.js` for custom themes
-- Global styles in `ui/src/index.css`
-- Use Tailwind utility classes throughout
-
-## 🚀 **Deployment**
-
-> **Note**: Embedded PostgreSQL is for local development only. Production deployments require an external database (configured during setup).
-
-### Backend (Cloudflare Workers)
-
-```bash
-cd server
-pnpm run deploy
-```
-
-Your API will be available at: `https://your-worker-name.your-subdomain.workers.dev`
-
-### Frontend (Cloudflare Pages)
-
-1. **Connect to Git**: Link your repository to [Cloudflare Pages](https://dash.cloudflare.com/pages)
-2. **Build Settings**:
-   - Build command: `pnpm run build`
-   - Build output: `ui/dist`
-3. **Deploy**: Automatic on every git push
-
-### Environment Variables (Production)
-
-Set these in Cloudflare dashboards:
-
-**Worker Environment Variables:**
-- `DATABASE_URL` - Your database connection string
-- `FIREBASE_PROJECT_ID` - Firebase project ID
-
-**Pages Environment Variables (if needed):**
-- `VITE_API_URL` - Your deployed worker URL (optional, defaults work)
-
-### Post-Deployment Setup
-
-1. **Update Firebase authorized domains**:
-   - Go to [Firebase Console](https://console.firebase.google.com) > Authentication > Settings
-   - Add your Pages domain (e.g., `your-app.pages.dev`)
-
-2. **Test your deployment**:
-   ```bash
-   curl https://your-worker-name.your-subdomain.workers.dev/api/v1/hello
-   ```
-
-## 🔐 **Authentication Flow**
-
-Your app includes a complete authentication system that works in both local and production modes:
-
-### Local Mode (Default)
-1. **Sign in**: Use any email/password combination in the UI
-2. **Storage**: User data stored in local Firebase emulator
-3. **API calls**: Authenticated requests work normally
-4. **Development**: No external accounts needed
-
-### Production Mode (After `pnpm connect:auth`)
-1. **Login**: Users sign in with Google (or other configured providers)
-2. **Token**: Frontend gets Firebase ID token
-3. **API calls**: Token sent in `Authorization: Bearer <token>` header
-4. **Verification**: Backend verifies token and creates/finds user in database
-5. **Protection**: Protected routes automatically have user context
-
-### Example API Call
-
-```typescript
-// Frontend (already implemented in lib/serverComm.ts)
-const response = await api.getCurrentUser();
-console.log(response.user);
-```
-
-## 🗄️ **Database**
-
-Your database is set up with Drizzle ORM and works the same whether local or production:
-
-### User Schema (included)
-
-```typescript
-// server/src/schema/users.ts
-export const users = pgTable('users', {
-  id: text('id').primaryKey(),
-  email: text('email').unique().notNull(),
-  display_name: text('display_name'),
-  photo_url: text('photo_url'),
-  created_at: timestamp('created_at').defaultNow(),
-  updated_at: timestamp('updated_at').defaultNow(),
-});
-```
-
-### Adding New Tables
-
-1. Create schema file in `server/src/schema/`
-2. Export from main schema file
-3. Push to database: `cd server && pnpm db:push`
-
-## 📚 **Learning Resources**
-
-- **React**: [react.dev](https://react.dev)
-- **Hono**: [hono.dev](https://hono.dev)
-- **Drizzle ORM**: [orm.drizzle.team](https://orm.drizzle.team)
-- **Tailwind CSS**: [tailwindcss.com](https://tailwindcss.com)
-- **ShadCN/UI**: [ui.shadcn.com](https://ui.shadcn.com)
-- **Cloudflare Workers**: [developers.cloudflare.com/workers](https://developers.cloudflare.com/workers)
-- **Firebase Auth**: [firebase.google.com/docs/auth](https://firebase.google.com/docs/auth)
-
-## 🆘 **Troubleshooting**
-
-### Development Issues
-
-**Backend won't start:**
-```bash
-cd server
-# Check environment variables
-cat .env
-# Reinstall dependencies
-pnpm install
-```
-
-**Database connection errors:**
-```bash
-cd server
-# Test database connection
-pnpm db:push
-```
-
-**Frontend build errors:**
-```bash
-cd ui
-# Clear cache and reinstall
-rm -rf node_modules .vite dist
-pnpm install
-```
-
-### Authentication Issues
-
-**Local Development:**
-- Firebase emulator should start automatically with `pnpm dev`
-- Try signing in with any email/password combination
-- Check `data/firebase-emulator/` for persisted data
-- **Data Protection**: Emulator data is automatically backed up every 60 seconds and on clean shutdown to prevent data loss during crashes
-
-**Production Mode:**
-1. **Check Firebase config**: `ui/src/lib/firebase-config.json`
-2. **Verify environment variables**: `server/.env`
-3. **Check authorized domains** in Firebase Console
-
-### Deployment Issues
-
-1. **Verify build succeeds locally**
-2. **Check environment variables** in Cloudflare dashboards
-3. **Review logs** in Cloudflare Workers/Pages dashboards
-
-## 🎯 **Next Steps**
-
-1. **Explore the code**: Start with `ui/src/App.tsx` and `server/src/index.ts`
-2. **Customize the UI**: Modify components and styling
-3. **Add features**: Build your app logic in both frontend and backend
-4. **Deploy**: Push to git for automatic deployment
+Acest proiect este licențiat sub [LICENSE](LICENSE).
 
 ---
 
-**Happy coding!** 🚀
+**🎯 Scop**: TechAnal să fie o aplicație de analiză AI pentru trading, complet locală, rapidă și precisă.
 
-Need help? Check the detailed documentation in each workspace (`server/README.md`, `ui/README.md`) or visit the [community discussions](https://github.com/VoloBuilds/create-volo-app/discussions). 
+**📚 Documentație**: Completă și actualizată automat cu fiecare funcționalitate nouă implementată.
+
+**🔄 Status**: Proiect în dezvoltare activă cu 80% complet. 

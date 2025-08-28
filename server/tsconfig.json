@@ -12,5 +12,16 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true
-  }
+  },
+  "exclude": [
+    "src/lib/**/db-optimized*.ts",
+    "src/lib/**/ai-analysis-optimized*.ts",
+    "src/lib/**/image-processing-optimized*.ts",
+    "src/lib/advanced-cache-service.ts",
+    "src/lib/redis-cache.ts",
+    "src/lib/critical-fixes.ts",
+    "src/lib/performance-integrator.ts",
+    "src/lib/performance-optimizer.ts",
+    "src/lib/target-calibrator.ts"
+  ]
 } 

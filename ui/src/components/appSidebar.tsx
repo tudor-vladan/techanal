@@ -1,9 +1,20 @@
 import { 
   Home, 
+  BarChart3, 
   Settings, 
-  FileText,
   Layers,
-} from "lucide-react";
+  Brain,
+  Users,
+  Target,
+  Shield,
+  Smartphone,
+  Activity,
+  Gauge,
+  FileText,
+  Lock,
+  Eye,
+  Bug
+} from 'lucide-react';
 import { Link, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -38,24 +49,108 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="Page 1" isActive={isActive('/page1')} asChild>
-                  <Link to="/page1">
-                    <FileText className="w-4 h-4" />
-                    <span>Page 1</span>
+                <SidebarMenuButton tooltip="Trading Analysis" isActive={isActive('/trading-analysis')} asChild>
+                  <Link to="/trading-analysis">
+                    <BarChart3 className="w-4 h-4" />
+                    <span>Trading Analysis</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="Page 2" isActive={isActive('/page2')} asChild>
-                  <Link to="/page2">
+                <SidebarMenuButton tooltip="System Monitor" isActive={isActive('/system-monitor')} asChild>
+                  <Link to="/system-monitor">
                     <Layers className="w-4 h-4" />
-                    <span>Page 2</span>
+                    <span>System Monitor</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Learning & Analytics" isActive={isActive('/learning-analytics')} asChild>
+                  <Link to="/learning-analytics">
+                    <Brain className="w-4 h-4" />
+                    <span>Learning & Analytics</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="AI Management" isActive={isActive('/ai-management')} asChild>
+                  <Link to="/ai-management">
+                    <Target className="w-4 h-4" />
+                    <span>AI Management</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {/* Model Management removed in favor of integration within AI Management */}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Security & PWA Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Security & PWA</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Security Monitoring" isActive={isActive('/security-monitoring')} asChild>
+                  <Link to="/security-monitoring">
+                    <Eye className="w-4 h-4" />
+                    <span>Security Monitoring</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="MFA Setup" isActive={isActive('/mfa-setup')} asChild>
+                  <Link to="/mfa-setup">
+                    <Shield className="w-4 h-4" />
+                    <span>MFA Setup</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="PWA Status" isActive={isActive('/pwa-status')} asChild>
+                  <Link to="/pwa-status">
+                    <Smartphone className="w-4 h-4" />
+                    <span>PWA Status</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Rate Limiting" isActive={isActive('/rate-limiting')} asChild>
+                  <Link to="/rate-limiting">
+                    <Activity className="w-4 h-4" />
+                    <span>Rate Limiting</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Security Audit" isActive={isActive('/security-audit')} asChild>
+                  <Link to="/security-audit">
+                    <FileText className="w-4 h-4" />
+                    <span>Security Audit</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Security Headers" isActive={isActive('/security-headers')} asChild>
+                  <Link to="/security-headers">
+                    <Lock className="w-4 h-4" />
+                    <span>Security Headers</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="Debug Console" isActive={isActive('/debug-logs')} asChild>
+                  <Link to="/debug-logs">
+                    <Bug className="w-4 h-4" />
+                    <span>Debug Console</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+
       </SidebarContent>
 
       <SidebarFooter>

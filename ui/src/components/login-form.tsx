@@ -2,8 +2,8 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
-import { auth, googleProvider } from "@/lib/firebase"
-import { signInWithEmailAndPassword, signInWithPopup, createUserWithEmailAndPassword } from "firebase/auth"
+import { useAuth } from "@/lib/auth-context"
+import MFAVerification from "./MFAVerification"
 
 const GoogleIcon = () => (
   <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
@@ -15,39 +15,77 @@ const GoogleIcon = () => (
 )
 
 export function LoginForm() {
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState("tudorel.vladan@gmail.com")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [showMFA, setShowMFA] = useState(false)
+  const { login, mfaRequired, mfaVerified } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    
+    if (!email || !password) {
+      setError("Please enter both email and password")
+      return
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
+      return
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, password)
-    } catch (err: any) {
-      // If user doesn't exist, automatically register them
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-        try {
-          await createUserWithEmailAndPassword(auth, email, password)
-          console.log('User automatically registered and signed in')
-        } catch (registerErr: any) {
-          setError(`Failed to register: ${registerErr.message}`)
-          console.error('Registration error:', registerErr)
-        }
-      } else {
-        setError("Failed to sign in. Please check your credentials.")
-        console.error(err)
+      // Local authentication - accept any valid email/password
+      await login({ email, password })
+      console.log('Successfully logged in with:', email)
+      
+      // Check if MFA is required
+      if (mfaRequired && !mfaVerified) {
+        setShowMFA(true)
       }
+    } catch (err: any) {
+      setError("Login failed. Please try again.")
+      console.error('Login error:', err)
     }
   }
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithPopup(auth, googleProvider)
+      // Simulate Google login
+      await login({ email: "google-user@example.com", password: "google-auth" })
+      console.log('Successfully logged in with Google')
+      
+      // Check if MFA is required
+      if (mfaRequired && !mfaVerified) {
+        setShowMFA(true)
+      }
     } catch (err) {
-      setError("Failed to sign in with Google.")
+      setError("Google sign-in failed. Please try again.")
       console.error(err)
     }
+  }
+
+  const handleMFASuccess = () => {
+    setShowMFA(false)
+    // Redirect or show success message
+    console.log('MFA verification successful')
+  }
+
+  const handleMFACancel = () => {
+    setShowMFA(false)
+    // Handle MFA cancellation (logout user)
+    console.log('MFA verification cancelled')
+  }
+
+  // Show MFA verification if required
+  if (showMFA) {
+    return (
+      <MFAVerification
+        onVerificationSuccess={handleMFASuccess}
+        onCancel={handleMFACancel}
+      />
+    )
   }
 
   return (
@@ -80,6 +118,12 @@ export function LoginForm() {
               />
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
+            
+            {/* MFA Demo Info */}
+            <div className="text-xs text-muted-foreground text-center p-2 bg-blue-50 rounded">
+              <p><strong>Demo MFA:</strong> Adaugă "mfa" în email pentru a activa MFA</p>
+              <p>Ex: user<span className="text-blue-600">mfa</span>@example.com</p>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-2">
@@ -95,11 +139,11 @@ export function LoginForm() {
           <Button 
             type="button" 
             variant="outline" 
-            className="w-full bg-white hover:bg-gray-50 text-gray-900 hover:text-gray-900 dark:bg-white dark:hover:bg-gray-50 dark:text-gray-900 dark:hover:text-gray-900 flex gap-2 items-center justify-center"
+            className="w-full"
             onClick={handleGoogleSignIn}
           >
             <GoogleIcon />
-            Sign in with Google
+            Google
           </Button>
         </CardFooter>
       </form>
