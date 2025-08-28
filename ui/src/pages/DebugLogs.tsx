@@ -233,32 +233,45 @@ export default function DebugLogsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {filtered.map((l) => (
-              <div key={l.id} className={`p-3 border rounded-md ${l.level === 'error' ? 'border-red-500/60 bg-red-500/10' : ''} ${l.level === 'warning' ? 'border-amber-500/40 bg-amber-500/5' : ''} ${logs.filter(x => x.message===l.message && x.source===l.source).length>3 ? 'bg-amber-50' : ''}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={l.level === 'error' ? 'destructive' : l.level === 'warning' ? 'secondary' : 'outline'} className="text-xs">
-                      {l.level.toUpperCase()}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{new Date(l.timestamp).toLocaleString()}</span>
+            {filtered.map((l) => {
+              const duplicateCount = logs.filter(x => x.message === l.message && x.source === l.source).length;
+              const containerTone = l.level === 'error'
+                ? 'border-destructive/50 bg-destructive/10 dark:bg-destructive/20'
+                : l.level === 'warning'
+                ? 'border-yellow-500/40 bg-yellow-500/10 dark:bg-yellow-950/20'
+                : 'bg-muted/5';
+              const textTone = l.level === 'error'
+                ? 'text-destructive'
+                : l.level === 'warning'
+                ? 'text-yellow-700 dark:text-yellow-400'
+                : 'text-foreground';
+              return (
+                <div key={l.id} className={`p-3 border rounded-md ${containerTone} ${duplicateCount > 3 ? 'ring-1 ring-amber-500/30 dark:ring-amber-400/30' : ''}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={l.level === 'error' ? 'destructive' : l.level === 'warning' ? 'secondary' : 'outline'} className="text-xs">
+                        {l.level.toUpperCase()}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{new Date(l.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground">{l.source}</div>
+                      <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => handleCopy(l)} title="Copy entry">
+                        {copiedId === l.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-muted-foreground">{l.source}</div>
-                    <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => handleCopy(l)} title="Copy entry">
-                      {copiedId === l.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    </Button>
+                  <div className={`mt-2 text-sm ${textTone}`}>
+                    {l.message || '(no message)'} {duplicateCount > 1 && (
+                      <Badge variant="secondary" className="ml-2 text-xs">x{duplicateCount}</Badge>
+                    )}
                   </div>
-                </div>
-                <div className={`mt-2 text-sm ${l.level === 'error' ? 'text-red-400' : ''} ${l.level === 'warning' ? 'text-amber-500' : ''}`}>
-                  {l.message || '(no message)'} {logs.filter(x => x.message===l.message && x.source===l.source).length>1 && (
-                    <Badge variant="secondary" className="ml-2 text-xs">x{logs.filter(x => x.message===l.message && x.source===l.source).length}</Badge>
+                  {l.details && (
+                    <pre className="mt-2 text-xs text-muted-foreground bg-muted/10 rounded p-2 whitespace-pre-wrap overflow-auto">{JSON.stringify(l.details, null, 2)}</pre>
                   )}
                 </div>
-                {l.details && (
-                  <pre className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap overflow-auto">{JSON.stringify(l.details, null, 2)}</pre>
-                )}
-              </div>
-            ))}
+              );
+            })}
             {filtered.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 <AlertTriangle className="w-6 h-6 mx-auto mb-2" />

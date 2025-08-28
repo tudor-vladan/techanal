@@ -66,6 +66,11 @@ export interface AIAnalysisResponse {
     marketSentiment: 'positive' | 'negative' | 'neutral';
     newsImpact: 'positive' | 'negative' | 'neutral';
   };
+  horizonSignals?: {
+    intraday: 'buy' | 'sell' | 'hold' | 'wait';
+    swing: 'buy' | 'sell' | 'hold' | 'wait';
+    longTerm: 'buy' | 'sell' | 'hold' | 'wait';
+  };
   processingTime: number;
   modelVersion: string;
   timestamp: number;
@@ -168,6 +173,37 @@ export interface ChartPatternDetection {
   patterns: string[];
   chartType?: string;
   timeframe?: string;
+}
+
+// Multi-agent orchestration types
+export interface MultiAgentConsensusResult {
+  recommendation: 'buy' | 'sell' | 'hold' | 'wait';
+  confidence: number; // 0..1
+  rationale: string;
+}
+
+export type MultiAgentAgentId = 'advancedEngine' | 'enhancedAnalysis' | 'optimizedV2';
+
+export interface NormalizedAgentResult {
+  agent: MultiAgentAgentId;
+  ok: boolean;
+  error?: string;
+  recommendation?: 'buy' | 'sell' | 'hold' | 'wait';
+  confidence?: number; // 0..1
+  technicalIndicators?: Record<string, any>;
+  analysisText?: string;
+  riskAssessment?: string;
+  positionSizing?: string;
+  extra?: Record<string, any>;
+}
+
+export interface MultiAgentOutput {
+  success: boolean;
+  consensus: MultiAgentConsensusResult;
+  mergedTechnicalIndicators: Record<string, any>;
+  perAgent: NormalizedAgentResult[];
+  requestId: string;
+  timestamp: number;
 }
 
 // Advanced AI Engine Types

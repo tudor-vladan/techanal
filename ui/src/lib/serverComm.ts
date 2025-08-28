@@ -6,8 +6,13 @@ import {
   AnalysisResult,
   AnalysisHistoryResponse,
   UserPromptsResponse,
-  AIEngineHealth
+  AIEngineHealth,
+  MultiAgentOutput
 } from '../types/analysis';
+
+
+
+
 import debugLogger from './debugLogger';
 
 interface APIErrorResponse {
@@ -291,6 +296,7 @@ export async function analyzeScreenshot(request: AnalysisRequest): Promise<Analy
       modelVersion: srv.modelVersion ?? 'unknown',
       timestamp: Date.now(),
       requestId: srv.requestId ?? '',
+      horizonSignals: srv.horizonSignals,
     };
 
     return {
@@ -300,6 +306,35 @@ export async function analyzeScreenshot(request: AnalysisRequest): Promise<Analy
 
   } catch (error) {
     console.error('Analysis failed:', error);
+    throw error;
+  }
+}
+
+export async function analyzeScreenshotMultiAgent(request: AnalysisRequest): Promise<MultiAgentOutput> {
+  try {
+    const user = localStorage.getItem('user');
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const form = new FormData();
+    form.append('image', request.image);
+    form.append('prompt', request.prompt);
+
+    const response = await fetchWithAuth('/api/ai/multi-agent/analyze', {
+      method: 'POST',
+      body: form,
+    });
+
+    const data = await response.json();
+    if (!data || !data.success) {
+      const message = (data && (data.details || data.error)) || 'Multi-agent analysis failed';
+      throw new Error(message);
+    }
+
+    return data.multiAgent as MultiAgentOutput;
+  } catch (error) {
+    console.error('Multi-agent analysis failed:', error);
     throw error;
   }
 }
@@ -360,11 +395,16 @@ export async function getAnalysisHistory(): Promise<AnalysisHistoryResponse> {
       const normalizedImageUrl = typeof item.imageUrl === 'string' && item.imageUrl.startsWith('/uploads')
         ? `${API_BASE_URL}/api/v1${item.imageUrl}`
         : item.imageUrl;
-      return {
+      const record = {
         ...item,
         imageUrl: normalizedImageUrl,
         aiResponse,
       } as TradingAnalysis;
+      // If full response present, surface horizonSignals for consumers
+      if (aiResponse && (aiResponse as any).horizonSignals) {
+        (record as any).horizonSignals = (aiResponse as any).horizonSignals;
+      }
+      return record;
     });
 
     return {
@@ -458,4 +498,63 @@ export async function getAIEngineStats(): Promise<AIEngineHealth> {
       timestamp: new Date().toISOString()
     };
   }
+}
+
+// Business Intelligence / Reports
+export type BusinessIntelligencePeriod = 'daily' | 'weekly' | 'monthly' | 'quarterly';
+export type BusinessIntelligenceFormat = 'json' | 'csv' | 'pdf';
+
+export interface ExportReportResponse {
+  success: boolean;
+  data?: {
+    filename: string;
+    format: BusinessIntelligenceFormat;
+    period: BusinessIntelligencePeriod;
+    downloadUrl: string;
+  };
+  error?: string;
+}
+
+export async function exportBusinessIntelligenceReport(
+  period: BusinessIntelligencePeriod,
+  format: BusinessIntelligenceFormat
+): Promise<ExportReportResponse> {
+  const res = await fetchWithAuth('/api/business-intelligence/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ period, format })
+  });
+  const json = await res.json();
+  return json as ExportReportResponse;
+}
+
+export async function downloadFileByUrl(downloadUrl: string, suggestedName?: string): Promise<void> {
+  const res = await fetchWithAuth(downloadUrl);
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName || downloadUrl.split('/').pop() || 'report';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export interface BusinessIntelligenceReportSummary {
+  period: BusinessIntelligencePeriod;
+  timestamp: string | Date;
+  // other fields may exist but are not required by the UI
+}
+
+export async function getBusinessIntelligenceReportHistory(limit: number = 10): Promise<BusinessIntelligenceReportSummary[]> {
+  const res = await fetchWithAuth(`/api/business-intelligence/reports?limit=${encodeURIComponent(String(limit))}`);
+  const json = await res.json();
+  if (!json?.success) return [];
+  const data = (json.data || []) as any[];
+  return data.map((r) => ({
+    period: r.period as BusinessIntelligencePeriod,
+    timestamp: typeof r.timestamp === 'string' ? r.timestamp : new Date(r.timestamp).toISOString()
+  }));
 }

@@ -44,6 +44,13 @@ export function AnalysisResults({ analysis, isLoading }: AnalysisResultsProps) {
     }
   };
 
+  const getSignalBadge = (label: string, signal: string) => (
+    <div className="flex items-center justify-between p-2 border rounded-md">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <Badge variant="outline" className={`${getRecommendationColor(signal)} text-xs`}>{signal.toUpperCase()}</Badge>
+    </div>
+  );
+
   const getRecommendationText = (recommendation: string) => {
     switch (recommendation) {
       case 'buy':
@@ -125,6 +132,26 @@ export function AnalysisResults({ analysis, isLoading }: AnalysisResultsProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Horizon Signals */}
+      {analysis.horizonSignals && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" />
+              Semnale pe Orizonturi (Intraday / Swing / Long-Term)
+            </CardTitle>
+            <CardDescription>Recomandări adaptate stilurilor de tranzacționare</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {getSignalBadge('Intraday', analysis.horizonSignals.intraday)}
+              {getSignalBadge('Swing', analysis.horizonSignals.swing)}
+              {getSignalBadge('Long-Term', analysis.horizonSignals.longTerm)}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Price Levels */}
       {(analysis.analysis.stopLoss || analysis.analysis.takeProfit) && (

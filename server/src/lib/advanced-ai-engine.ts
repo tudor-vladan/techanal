@@ -40,6 +40,15 @@ export interface AIAnalysisResponse {
     marketSentiment: 'positive' | 'negative' | 'neutral';
     newsImpact: 'positive' | 'negative' | 'neutral';
   };
+  /**
+   * Horizon-specific signals for different trading styles.
+   * intraday ~ minutes-hours, swing ~ days-weeks, longTerm ~ weeks-months
+   */
+  horizonSignals?: {
+    intraday: 'buy' | 'sell' | 'hold' | 'wait';
+    swing: 'buy' | 'sell' | 'hold' | 'wait';
+    longTerm: 'buy' | 'sell' | 'hold' | 'wait';
+  };
   processingTime: number;
   modelVersion: string;
   timestamp: number;
@@ -314,13 +323,21 @@ export class AdvancedAIEngine extends EventEmitter {
       // 5. Assess risk and position sizing
       const riskAssessment = await this.assessRiskAndPositionSizing(recommendation, technicalAnalysis);
       
+      // 5.1 Generate horizon-specific signals (intraday/swing/long-term)
+      const horizonSignals = this.generateHorizonSignals(
+        chartAnalysis,
+        technicalAnalysis,
+        sentimentAnalysis
+      );
+      
       // 6. Compile final analysis
       const finalAnalysis = this.compileFinalAnalysis(
         recommendation,
         riskAssessment,
         chartAnalysis,
         technicalAnalysis,
-        sentimentAnalysis
+        sentimentAnalysis,
+        horizonSignals
       );
       
       return finalAnalysis;
@@ -481,7 +498,8 @@ export class AdvancedAIEngine extends EventEmitter {
     riskAssessment: any,
     chartAnalysis: ChartAnalysisResult,
     technicalAnalysis: TechnicalIndicatorResult[],
-    sentimentAnalysis: any
+    sentimentAnalysis: any,
+    horizonSignals?: { intraday: 'buy' | 'sell' | 'hold' | 'wait'; swing: 'buy' | 'sell' | 'hold' | 'wait'; longTerm: 'buy' | 'sell' | 'hold' | 'wait' }
   ): AIAnalysisResponse {
     try {
       return {
@@ -509,6 +527,7 @@ export class AdvancedAIEngine extends EventEmitter {
           marketSentiment: sentimentAnalysis.sentiment,
           newsImpact: sentimentAnalysis.newsImpact
         },
+        horizonSignals,
         processingTime: 0, // Will be set by caller
         modelVersion: this.config.modelVersion,
         timestamp: 0, // Will be set by caller
@@ -722,6 +741,49 @@ export class AdvancedAIEngine extends EventEmitter {
 
   private generateRequestId(): string {
     return `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Generate horizon-specific signals using existing components.
+   * Lightweight heuristic: weigh relevant indicators and sentiment per horizon.
+   */
+  private generateHorizonSignals(
+    chart: ChartAnalysisResult,
+    indicators: TechnicalIndicatorResult[],
+    sentiment: any
+  ): { intraday: 'buy' | 'sell' | 'hold' | 'wait'; swing: 'buy' | 'sell' | 'hold' | 'wait'; longTerm: 'buy' | 'sell' | 'hold' | 'wait' } {
+    const scoreFor = (names: string[], extraBias: number = 0): number => {
+      const relevant = indicators.filter(i => names.some(n => i.indicator.toLowerCase().includes(n.toLowerCase())));
+      const buys = relevant.filter(i => i.signal === 'buy').length;
+      const sells = relevant.filter(i => i.signal === 'sell').length;
+      const neutrals = relevant.length - buys - sells;
+      let s = (buys - sells) * 15 + neutrals * 2; // base from signals
+      // trend bias
+      if (chart.trendDirection === 'bullish') s += 12; else if (chart.trendDirection === 'bearish') s -= 12;
+      // sentiment bias
+      if (sentiment?.sentiment === 'positive') s += 6; else if (sentiment?.sentiment === 'negative') s -= 6;
+      // timeframe bias
+      s += extraBias;
+      return Math.max(-100, Math.min(100, s));
+    };
+
+    // Determine biases by actual detected timeframe
+    const tf = (chart.timeframe || '').toLowerCase();
+    const isIntraday = ['1m','3m','5m','15m','30m','45m','1h'].some(t => tf.includes(t));
+    const isSwing = ['4h','6h','8h','12h','1d'].some(t => tf.includes(t));
+    const isLong = ['1d','3d','1w','1m','1M','1w','1W','1M'].some(t => tf.includes(t));
+
+    const intradayScore = scoreFor(['rsi','stochastic','bollinger'], isIntraday ? 5 : 0);
+    const swingScore = scoreFor(['macd','moving averages','stochastic'], isSwing ? 5 : 0);
+    const longScore = scoreFor(['moving averages','macd','volume'], isLong ? 6 : 0);
+
+    const toSignal = (s: number): 'buy' | 'sell' | 'hold' | 'wait' => this.generateRecommendationFromScore(s);
+
+    return {
+      intraday: toSignal(intradayScore),
+      swing: toSignal(swingScore),
+      longTerm: toSignal(longScore)
+    };
   }
 
   /**

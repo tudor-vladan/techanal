@@ -27,6 +27,9 @@ import { SystemCharts } from '@/components/SystemCharts';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, AreaChart, Area } from 'recharts';
 import { fetchWithAuth, getAIEngineStats, API_BASE_URL, getLocalAuthToken } from '@/lib/serverComm';
 
+import type { BusinessIntelligencePeriod, BusinessIntelligenceFormat } from '@/lib/serverComm';
+import { getBusinessIntelligenceReportHistory, exportBusinessIntelligenceReport, downloadFileByUrl } from '@/lib/serverComm';
+
 interface ProcessInfo {
   id: string;
   name: string;
@@ -103,6 +106,12 @@ export default function SystemMonitor() {
   const [liveEvents, setLiveEvents] = useState<LiveLogEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
 
+  // Reports state
+  const [reportPeriod, setReportPeriod] = useState<BusinessIntelligencePeriod>('monthly');
+  const [reportFormat, setReportFormat] = useState<BusinessIntelligenceFormat>('pdf');
+  const [recentReports, setRecentReports] = useState<Array<{ period: BusinessIntelligencePeriod; timestamp: string }>>([]);
+  const [isExportingReport, setIsExportingReport] = useState(false);
+
   // Unified style for stat cards to keep consistent look-and-feel with the app
   const statCardClass = "rounded-xl border-muted/50 bg-card/60 backdrop-blur supports-[backdrop-filter]:bg-card/70 hover:bg-accent/40 transition-colors";
   const statValueClass = "text-2xl font-semibold text-primary";
@@ -163,6 +172,35 @@ export default function SystemMonitor() {
   }, [chartData]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Load report history when entering the tab or on mount
+  useEffect(() => {
+    if (activeTab !== 'reports') return;
+    (async () => {
+      try {
+        const history = await getBusinessIntelligenceReportHistory(10);
+        setRecentReports(history.map(h => ({ period: h.period, timestamp: typeof h.timestamp === 'string' ? h.timestamp : new Date(h.timestamp).toISOString() })));
+      } catch (e) {
+        console.error('Failed to load report history', e);
+      }
+    })();
+  }, [activeTab]);
+
+  const exportAndDownloadReport = useCallback(async () => {
+    setIsExportingReport(true);
+    try {
+      const res = await exportBusinessIntelligenceReport(reportPeriod, reportFormat);
+      if (res.success && res.data?.downloadUrl) {
+        await downloadFileByUrl(res.data.downloadUrl, res.data.filename);
+      } else {
+        alert(res.error || 'Export failed');
+      }
+    } catch (e: any) {
+      console.error('Export error', e);
+      alert(e?.message || 'Export error');
+    } finally {
+      setIsExportingReport(false);
+    }
+  }, [reportPeriod, reportFormat]);
 
   // Reference to satisfy linter for future-use state
   void debugLogs; void isLoading; void error;
@@ -1572,25 +1610,25 @@ export default function SystemMonitor() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium">Tip Raport</label>
-                        <select className="w-full mt-1 p-2 border rounded-md">
-                          <option>Performance Summary</option>
-                          <option>Resource Usage</option>
-                          <option>Process Analysis</option>
-                          <option>System Health</option>
+                        <select className="w-full mt-1 p-2 border rounded-md" id="report-type" value={reportPeriod} onChange={(e) => setReportPeriod(e.target.value as BusinessIntelligencePeriod)}>
+                          <option value="monthly">Performance Summary (monthly)</option>
+                          <option value="weekly">Resource Usage (weekly)</option>
+                          <option value="daily">Process Analysis (daily)</option>
+                          <option value="quarterly">System Health (quarterly)</option>
                         </select>
                       </div>
                       <div>
                         <label className="text-sm font-medium">Format</label>
-                        <select className="w-full mt-1 p-2 border rounded-md">
-                          <option>PDF</option>
-                          <option>CSV</option>
-                          <option>JSON</option>
+                        <select className="w-full mt-1 p-2 border rounded-md" id="report-format" value={reportFormat} onChange={(e) => setReportFormat(e.target.value as BusinessIntelligenceFormat)}>
+                          <option value="pdf">PDF</option>
+                          <option value="csv">CSV</option>
+                          <option value="json">JSON</option>
                         </select>
                       </div>
                     </div>
-                    <Button className="w-full">
+                    <Button className="w-full" onClick={exportAndDownloadReport} disabled={isExportingReport}>
                       <FileText className="w-4 h-4 mr-2" />
-                      Generează Raport
+                      {isExportingReport ? 'Se generează...' : 'Generează Raport'}
                     </Button>
                   </div>
                 </CardContent>
@@ -1606,26 +1644,21 @@ export default function SystemMonitor() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-blue-500" />
-                        <div>
-                          <div className="font-medium">Performance Summary</div>
-                          <div className="text-sm text-muted-foreground">Generated 2 hours ago</div>
+                    {recentReports.length === 0 && (
+                      <div className="text-sm text-muted-foreground">No reports yet.</div>
+                    )}
+                    {recentReports.map((r, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-blue-500" />
+                          <div>
+                            <div className="font-medium">{r.period.toUpperCase()} report</div>
+                            <div className="text-sm text-muted-foreground">{new Date(r.timestamp).toLocaleString()}</div>
+                          </div>
                         </div>
+                        <Button variant="outline" size="sm" onClick={exportAndDownloadReport}>Download latest</Button>
                       </div>
-                      <Button variant="outline" size="sm">Download</Button>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-green-500" />
-                        <div>
-                          <div className="font-medium">Resource Usage</div>
-                          <div className="text-sm text-muted-foreground">Generated 1 day ago</div>
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm">Download</Button>
-                    </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>

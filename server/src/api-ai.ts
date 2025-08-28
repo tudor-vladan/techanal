@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { authMiddleware } from './middleware/auth';
 import { aiService, AIServiceFactory } from './lib/ai-service';
+import { multiAgentOrchestrator } from './lib/multi-agent-orchestrator';
 import { enhancedAIAnalysis } from './lib/enhanced-ai-analysis';
 import { validateImage, compressImage, saveImage, detectChartPatterns } from './lib/image-processing-utils';
 import { ImageProcessingError } from './lib/image-processing';
@@ -375,6 +376,104 @@ aiRoutes.post('/enhanced-analysis', async (c) => {
     console.error('Enhanced analysis error:', error);
     return c.json({
       error: 'Enhanced analysis failed',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// Multi-Agent Analysis Endpoint
+aiRoutes.post('/multi-agent/analyze', async (c) => {
+  try {
+    const user = c.get('user');
+    const formData = await c.req.formData();
+    const imageFile = formData.get('image');
+    const userPrompt = formData.get('prompt');
+
+    if (!imageFile || !userPrompt) {
+      return c.json({
+        error: 'Image and prompt are required',
+        details: {
+          hasImage: !!imageFile,
+          hasPrompt: !!userPrompt,
+        }
+      }, 400);
+    }
+
+    if (typeof imageFile === 'string' || !imageFile || typeof imageFile !== 'object') {
+      return c.json({
+        error: 'Invalid image file format',
+        details: { receivedType: typeof imageFile }
+      }, 400);
+    }
+
+    const file = imageFile as any;
+    if (typeof file.arrayBuffer !== 'function' || typeof file.name !== 'string' || typeof file.type !== 'string' || typeof file.size !== 'number') {
+      return c.json({
+        error: 'Invalid file object - missing required File properties',
+        details: {
+          hasArrayBuffer: typeof file.arrayBuffer === 'function',
+          hasName: typeof file.name === 'string',
+          hasType: typeof file.type === 'string',
+          hasSize: typeof file.size === 'number'
+        }
+      }, 400);
+    }
+
+    const maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '10485760', 10);
+    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+    if (file.size > maxFileSize) {
+      return c.json({ error: 'Image too large', details: { size: file.size, max: maxFileSize } }, 400);
+    }
+    if (!allowedTypes.has(file.type)) {
+      return c.json({ error: 'Unsupported image type', details: { type: file.type, allowed: Array.from(allowedTypes) } }, 400);
+    }
+
+    const imageBuffer = Buffer.from(await file.arrayBuffer());
+    const mockFile: MulterFile = {
+      fieldname: 'image',
+      originalname: file.name,
+      encoding: '7bit',
+      mimetype: file.type,
+      size: file.size,
+      buffer: imageBuffer,
+    };
+
+    await validateImage(mockFile);
+    const processedImage = await compressImage(imageBuffer);
+    const patternDetection = await detectChartPatterns(processedImage.buffer);
+
+    const uploadDir = process.env.UPLOAD_DIR || 'uploads';
+    const { filename } = await saveImage(processedImage.buffer, file.name, uploadDir);
+
+    const orchestratorInput = {
+      imageBase64: processedImage.buffer.toString('base64'),
+      imagePath: `/uploads/${filename}`,
+      prompt: userPrompt.toString().trim(),
+      userId: user.id,
+      priority: 'normal' as const,
+      metadata: {
+        chartType: patternDetection.chartType,
+        timeframe: patternDetection.timeframe,
+        imageSize: processedImage.info.size,
+        imageFormat: processedImage.info.format || 'jpeg',
+      },
+    };
+
+    const result = await multiAgentOrchestrator.analyze(orchestratorInput);
+
+    return c.json({
+      success: true,
+      multiAgent: result,
+      patternDetection,
+      imageInfo: processedImage.info,
+      imageUrl: orchestratorInput.imagePath,
+      message: 'Multi-agent analysis completed successfully',
+    });
+
+  } catch (error) {
+    console.error('Multi-agent analysis error:', error);
+    return c.json({
+      error: 'Multi-agent analysis failed',
       details: error instanceof Error ? error.message : 'Unknown error',
     }, 500);
   }

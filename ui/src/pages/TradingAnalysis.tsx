@@ -12,7 +12,7 @@ import { ChartOverlay } from '@/components/ChartOverlay';
 import { AnalysisProgress } from '@/components/AnalysisProgress';
 import { AnalysisComparison } from '@/components/AnalysisComparison';
 import { AIProviderSelector } from '@/components/AIProviderSelector';
-import { analyzeScreenshot, getAnalysisHistory, getUserPrompts, saveUserPrompt } from '@/lib/serverComm';
+import { analyzeScreenshot, analyzeScreenshotMultiAgent, getAnalysisHistory, getUserPrompts, saveUserPrompt } from '@/lib/serverComm';
 import { 
   TradingAnalysis, 
   UserPrompt, 
@@ -75,6 +75,16 @@ export default function TradingAnalysisPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPTS[0].content);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedHorizon, setSelectedHorizon] = useState<'intraday' | 'swing' | 'longTerm'>(() => {
+    try {
+      const saved = localStorage.getItem('selectedHorizon');
+      if (saved === 'intraday' || saved === 'swing' || saved === 'longTerm') return saved;
+    } catch {}
+    return 'intraday';
+  });
+  React.useEffect(() => {
+    try { localStorage.setItem('selectedHorizon', selectedHorizon); } catch {}
+  }, [selectedHorizon]);
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisResponse | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -290,9 +300,15 @@ export default function TradingAnalysisPage() {
       // Start progress simulation
       simulateAnalysisProgress();
       
+      const timeframeHint = selectedHorizon === 'intraday' ? '1m-1h'
+        : selectedHorizon === 'swing' ? '4h-1d'
+        : '1w-1M';
+      const horizonInstruction = `\n\nHorizon: ${selectedHorizon} (timeframe guidance: ${timeframeHint}). Align all signals, risk, and entries to this horizon.`;
+      const finalPrompt = `${prompt.trim()}${horizonInstruction}`;
+
       const request: AnalysisRequest = {
         image: selectedImage,
-        prompt: prompt.trim()
+        prompt: finalPrompt
       };
 
       const result = await analyzeScreenshot(request);
@@ -322,6 +338,88 @@ export default function TradingAnalysisPage() {
       }
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleAnalyzeMultiAgent = async () => {
+    if (!selectedImage || !prompt.trim()) {
+      setError('Please select an image and enter a prompt');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setError(null);
+    resetAnalysisProgress();
+    setUploadProgress({ stage: 'uploading', progress: 0, message: 'Starting multi-agent analysis...' });
+
+    try {
+      simulateAnalysisProgress();
+
+      const timeframeHint = selectedHorizon === 'intraday' ? '1m-1h'
+        : selectedHorizon === 'swing' ? '4h-1d'
+        : '1w-1M';
+      const horizonInstruction = `\n\nHorizon: ${selectedHorizon} (timeframe guidance: ${timeframeHint}). Align all signals, risk, and entries to this horizon.`;
+      const finalPrompt = `${prompt.trim()}${horizonInstruction}`;
+
+      const request: AnalysisRequest = {
+        image: selectedImage,
+        prompt: finalPrompt
+      };
+
+      const multi = await analyzeScreenshotMultiAgent(request);
+
+      const synthetic: AIAnalysisResponse = {
+        success: true,
+        analysis: {
+          recommendation: multi.consensus.recommendation,
+          confidence: Math.round((multi.consensus.confidence || 0) * 100),
+          reasoning: multi.consensus.rationale,
+          riskAssessment: 'Consensus-based risk not estimated',
+          positionSizing: 'Use position sizing per individual agent if needed'
+        },
+        technicalIndicators: {
+          trend: 'neutral',
+          strength: 0,
+          momentum: 'moderate',
+          support: [],
+          resistance: [],
+          patterns: []
+        },
+        marketContext: {
+          volatility: 'medium',
+          volume: 'medium',
+          marketSentiment: 'neutral',
+          newsImpact: 'neutral'
+        },
+        processingTime: 0,
+        modelVersion: 'multi-agent',
+        timestamp: multi.timestamp,
+        requestId: multi.requestId
+      };
+
+      setAnalysisResult(synthetic);
+      setUploadProgress({ stage: 'completed', progress: 100, message: 'Multi-agent analysis completed!' });
+      setActiveTab('results');
+    } catch (err) {
+      console.error('Multi-agent analysis failed:', err);
+      setError(err instanceof Error ? err.message : 'Multi-agent analysis failed');
+      setUploadProgress(null);
+      if (currentAnalysisStep) updateAnalysisStep(currentAnalysisStep, 'error', 0);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleHorizonClick = (h: 'intraday' | 'swing' | 'longTerm') => {
+    setSelectedHorizon(h);
+    if (selectedImage && prompt.trim()) {
+      // Ensure state is flushed before using it in handleAnalyze
+      setTimeout(() => {
+        handleAnalyze();
+      }, 0);
+    } else {
+      setActiveTab('upload');
+      setError('Selectează o imagine și un prompt apoi pornește analiza. Orizontul este setat.');
     }
   };
 
@@ -572,6 +670,44 @@ export default function TradingAnalysisPage() {
 
         <TabsContent value="overview" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Horizon Selector */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="w-5 h-5" />
+                  Alege Orizontul de Tranzacționare
+                </CardTitle>
+                <CardDescription>
+                  Selectează stilul: Intraday, Swing sau Long‑Term. Va influența analiza AI.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {([
+                    { key: 'intraday', title: 'Intraday', desc: 'Minute - Ore' },
+                    { key: 'swing', title: 'Swing', desc: 'Zile - Săptămâni' },
+                    { key: 'longTerm', title: 'Long‑Term', desc: 'Săptămâni - Luni' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => handleHorizonClick(opt.key)}
+                      className={`p-4 border rounded-lg text-left transition-colors ${
+                        selectedHorizon === opt.key
+                          ? 'border-primary bg-primary/10'
+                          : 'hover:bg-muted'
+                      }`}
+                    >
+                      <div className="font-semibold">{opt.title}</div>
+                      <div className="text-xs text-muted-foreground">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Selectat: <span className="font-medium capitalize">{selectedHorizon}</span>. Preferința e salvată automat.
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -645,6 +781,54 @@ export default function TradingAnalysisPage() {
                     Modelul AI procesează în medie {tradingMetrics.averageResponseTime}s per analiză
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Horizon Signals (compact) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Horizon Signals
+                </CardTitle>
+                <CardDescription>
+                  Semnale Intraday / Swing / Long‑Term din ultima analiză
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(analysisResult?.horizonSignals || analysisHistory[0]?.aiResponse?.horizonSignals) ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {(['intraday','swing','longTerm'] as const).map((key) => {
+                        const label = key === 'intraday' ? 'Intraday' : key === 'swing' ? 'Swing' : 'Long‑Term';
+                        const source = analysisResult?.horizonSignals ? analysisResult.horizonSignals : (analysisHistory[0]?.aiResponse?.horizonSignals as any);
+                        const signal = source[key];
+                        const color = signal === 'buy' ? 'bg-green-100 text-green-800 border-green-200'
+                                    : signal === 'sell' ? 'bg-red-100 text-red-800 border-red-200'
+                                    : signal === 'hold' ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                    : 'bg-blue-100 text-blue-800 border-blue-200';
+                        return (
+                          <div key={key} className="p-3 border rounded-lg flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">{label}</span>
+                            <span className={`px-2 py-1 text-xs rounded-md border ${color}`}>{signal.toUpperCase()}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab('history')}
+                      >
+                        View details
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nu există semnale pe orizonturi încă. Rulează o analiză în tabul „Upload”.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -721,6 +905,7 @@ export default function TradingAnalysisPage() {
                 title="Analizează Screenshot"
                 description="Lansează analiza AI a chart-ului de trading"
                 tips={[
+                  `Orizont selectat: ${selectedHorizon}. Poți schimba din Overview.`,
                   'Asigură-te că ai selectat o imagine și ai scris un prompt',
                   'Analiza durează 2-5 secunde',
                   'Rezultatele sunt salvate automat în istoric'
@@ -745,6 +930,14 @@ export default function TradingAnalysisPage() {
                   )}
                 </Button>
               </UserHelp>
+              <Button 
+                onClick={handleAnalyzeMultiAgent} 
+                disabled={!selectedImage || !prompt.trim() || isAnalyzing}
+                variant="secondary"
+                className="w-full"
+              >
+                Rulează Multi‑Agent
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
