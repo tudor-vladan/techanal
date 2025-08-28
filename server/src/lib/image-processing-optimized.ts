@@ -1,4 +1,14 @@
 import sharp from 'sharp';
+import type { Request } from 'express';
+// Define minimal Multer file interface locally to avoid global namespace issues
+export interface MulterFileLike {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs/promises';
@@ -44,7 +54,7 @@ export class ImageProcessorOptimized {
   private readonly maxDimensions = { width: 4000, height: 4000 };
   private readonly minDimensions = { width: 100, height: 100 };
   private readonly allowedFormats = ['jpeg', 'jpg', 'png', 'webp'];
-  private readonly defaultOptions: ProcessingOptions = {
+  private defaultOptions: ProcessingOptions = {
     quality: 85,
     maxWidth: 1920,
     maxHeight: 1080,
@@ -71,7 +81,7 @@ export class ImageProcessorOptimized {
   /**
    * Validate image with optimized checks
    */
-  async validateImage(file: Express.Multer.File): Promise<void> {
+  async validateImage(file: MulterFileLike): Promise<void> {
     // Check file size
     if (file.size > this.maxFileSize) {
       throw new ImageProcessingError(
@@ -134,7 +144,7 @@ export class ImageProcessorOptimized {
   /**
    * Process image with optimized pipeline and parallel processing
    */
-  async processImage(file: Express.Multer.File, options: Partial<ProcessingOptions> = {}): Promise<ProcessedImage> {
+  async processImage(file: MulterFileLike, options: Partial<ProcessingOptions> = {}): Promise<ProcessedImage> {
     const startTime = Date.now();
     const processingOptions = { ...this.defaultOptions, ...options };
     
@@ -322,7 +332,7 @@ export class ImageProcessorOptimized {
   /**
    * Batch process multiple images with parallel processing
    */
-  async processImages(files: Express.Multer.File[], options: Partial<ProcessingOptions> = {}): Promise<ProcessedImage[]> {
+  async processImages(files: MulterFileLike[], options: Partial<ProcessingOptions> = {}): Promise<ProcessedImage[]> {
     const processingOptions = { ...this.defaultOptions, ...options };
     
     if (processingOptions.parallel) {

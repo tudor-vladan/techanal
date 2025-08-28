@@ -5,6 +5,7 @@ export interface AIAnalysisRequest {
   userPrompt: string;
   userId: string;
   priority?: 'high' | 'normal' | 'low';
+  timestamp?: number;
 }
 
 export interface AIAnalysisResponse {
@@ -37,11 +38,11 @@ export interface ProcessingQueue {
 export class AIAnalysisServiceOptimizedV2 {
   private readonly maxRetries = 3;
   private readonly timeoutMs = 30000; // 30 seconds
-  private readonly optimizedDelayMs = 1500; // Reduced from 2000ms to 1500ms
+  private optimizedDelayMs = 1500; // Reduced from 2000ms to 1500ms (mutable via updateSettings)
   private readonly cache = new Map<string, { response: AIAnalysisResponse; timestamp: number }>();
-  private readonly cacheTTL = 5 * 60 * 1000; // 5 minutes cache TTL
+  private cacheTTL = 5 * 60 * 1000; // 5 minutes cache TTL (mutable via updateSettings)
   private readonly processingQueue: ProcessingQueue[] = [];
-  private readonly maxConcurrentProcessing = 3;
+  private maxConcurrentProcessing = 3;
   private readonly priorityWeights = {
     high: 3,
     normal: 2,
@@ -106,7 +107,9 @@ export class AIAnalysisServiceOptimizedV2 {
    */
   private calculatePriority(request: AIAnalysisRequest): number {
     const basePriority = this.priorityWeights[request.priority || 'normal'];
-    const timeFactor = 1 / (Date.now() - request.timestamp || 1);
+    const requestTimestamp = request.timestamp ?? Date.now();
+    const ageMs = Math.max(1, Date.now() - requestTimestamp);
+    const timeFactor = 1 / ageMs;
     return basePriority * timeFactor;
   }
 

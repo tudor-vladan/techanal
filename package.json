@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/run-dev.js",
     "grunt": "grunt",
+    "ci": "grunt ci",
     "firebase:emulator": "firebase emulators:start --only auth --project demo-project --export-on-exit=./data/firebase-emulator --import=./data/firebase-emulator",
     "post-setup": "node scripts/post-setup.js",
     "connect:auth": "npx create-volo-app --connect --auth",

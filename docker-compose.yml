@@ -57,7 +57,7 @@ services:
     ports:
       - "5501:5173"
     environment:
-      VITE_API_URL: http://localhost:5500
+      VITE_API_URL: http://server:8787
       VITE_USE_FIREBASE_EMULATOR: "false"
     volumes:
       - ./ui:/app
