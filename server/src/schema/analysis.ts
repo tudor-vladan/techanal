@@ -83,6 +83,31 @@ export const userInteractions = pgTable('user_interactions', {
   timestampIdx: index('user_interactions_timestamp_idx').on(table.timestamp),
 }));
 
+// Backtesting results (minimal viable schema for persistence and listing)
+export const backtestResults = pgTable('backtest_results', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  startDate: timestamp('start_date').notNull(),
+  endDate: timestamp('end_date').notNull(),
+  totalSignals: integer('total_signals').notNull().default(0),
+  winningSignals: integer('winning_signals').notNull().default(0),
+  losingSignals: integer('losing_signals').notNull().default(0),
+  winRate: decimal('win_rate', { precision: 8, scale: 4 }).notNull().default('0'),
+  totalReturn: decimal('total_return', { precision: 18, scale: 6 }).notNull().default('0'),
+  maxDrawdown: decimal('max_drawdown', { precision: 18, scale: 6 }).notNull().default('0'),
+  sharpeRatio: decimal('sharpe_ratio', { precision: 18, scale: 6 }).notNull().default('0'),
+  profitFactor: decimal('profit_factor', { precision: 18, scale: 6 }).notNull().default('0'),
+  averageWin: decimal('average_win', { precision: 18, scale: 6 }).notNull().default('0'),
+  averageLoss: decimal('average_loss', { precision: 18, scale: 6 }).notNull().default('0'),
+  riskRewardRatio: decimal('risk_reward_ratio', { precision: 18, scale: 6 }).notNull().default('0'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index('backtest_results_user_id_idx').on(table.userId),
+  datesIdx: index('backtest_results_dates_idx').on(table.startDate, table.endDate),
+  createdAtIdx: index('backtest_results_created_at_idx').on(table.createdAt),
+}));
+
 export type TradingAnalysis = typeof tradingAnalyses.$inferSelect;
 export type NewTradingAnalysis = typeof tradingAnalyses.$inferInsert;
 export type UserPrompt = typeof userPrompts.$inferSelect;
@@ -91,3 +116,5 @@ export type UserFeedback = typeof userFeedback.$inferSelect;
 export type NewUserFeedback = typeof userFeedback.$inferInsert;
 export type UserInteraction = typeof userInteractions.$inferSelect;
 export type NewUserInteraction = typeof userInteractions.$inferInsert;
+export type BacktestResultRow = typeof backtestResults.$inferSelect;
+export type NewBacktestResultRow = typeof backtestResults.$inferInsert;

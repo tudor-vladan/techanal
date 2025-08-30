@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,12 +28,24 @@ interface Notification {
 interface NotificationCenterProps {
   isMonitoring: boolean;
   resources: any;
+  externalEvents?: Array<{
+    id?: string;
+    type: Notification['type'];
+    title: string;
+    message: string;
+    timestamp?: string;
+    source?: string;
+    priority?: Notification['priority'];
+    actionRequired?: boolean;
+    category?: Notification['category'];
+  }>;
 }
 
-export function NotificationCenter({ isMonitoring, resources }: NotificationCenterProps) {
+export function NotificationCenter({ isMonitoring, resources, externalEvents }: NotificationCenterProps) {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const processedExternalIdsRef = useRef<Set<string>>(new Set());
 
   // Generează notificări în timp real
   useEffect(() => {
@@ -157,6 +169,36 @@ export function NotificationCenter({ isMonitoring, resources }: NotificationCent
 
     return () => clearInterval(interval);
   }, [isMonitoring, resources, soundEnabled]);
+
+  // Ingest external events as notifications (idempotent)
+  useEffect(() => {
+    if (!externalEvents || externalEvents.length === 0) return;
+    const toAdd: Notification[] = [];
+    for (const ev of externalEvents) {
+      const id = ev.id || `${ev.title}-${ev.message}-${ev.timestamp || ''}`;
+      if (processedExternalIdsRef.current.has(id)) continue;
+      processedExternalIdsRef.current.add(id);
+      toAdd.push({
+        id,
+        type: ev.type,
+        title: ev.title,
+        message: ev.message,
+        timestamp: ev.timestamp || new Date().toISOString(),
+        isRead: false,
+        isDismissed: false,
+        source: ev.source || 'system',
+        priority: ev.priority || 'high',
+        actionRequired: ev.actionRequired ?? false,
+        category: ev.category || 'system'
+      });
+    }
+    if (toAdd.length > 0) {
+      setNotifications(prev => [...toAdd, ...prev]);
+      if (soundEnabled) {
+        playNotificationSound();
+      }
+    }
+  }, [externalEvents, soundEnabled]);
 
   // Auto-dismiss notifications after 5 minutes
   useEffect(() => {

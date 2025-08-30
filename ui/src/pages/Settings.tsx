@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   User, 
   Settings as SettingsIcon, 
@@ -28,7 +29,8 @@ import {
   BarChart3,
   Download,
   Upload,
-  Trash2
+  Trash2,
+  HelpCircle
 } from 'lucide-react';
 
 interface UserPreferences {
@@ -164,6 +166,141 @@ export function Settings() {
   // Local state for AI test actions
   const [aiTestState, setAiTestState] = useState<'idle' | 'connectivity' | 'model' | 'analysis'>('idle');
   const [aiTestMessage, setAiTestMessage] = useState<string | null>(null);
+
+  // Database Info modal state
+  const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+  const [dbInfo, setDbInfo] = useState<any | null>(null);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+
+  // Data Management functions
+  const handleExportData = async () => {
+    try {
+      const dataToExport = {
+        userProfile: profile,
+        preferences: preferences,
+        aiPreferences: aiPreferences,
+        exportDate: new Date().toISOString(),
+        version: '1.0.0'
+      };
+      
+      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { 
+        type: 'application/json' 
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `techanal-settings-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      alert('Error exporting data. Please try again.');
+    }
+  };
+
+  const handleImportData = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            try {
+              const importedData = JSON.parse(e.target?.result as string);
+              
+              // Validate imported data structure
+              if (importedData.userProfile && importedData.preferences && importedData.aiPreferences) {
+                setProfile(importedData.userProfile);
+                setPreferences(importedData.preferences);
+                setAIPreferences(importedData.aiPreferences);
+                alert('Data imported successfully!');
+              } else {
+                alert('Invalid data format. Please use a valid export file.');
+              }
+            } catch (error) {
+              alert('Error parsing imported file. Please check the file format.');
+            }
+          };
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    } catch (error) {
+      console.error('Error importing data:', error);
+      alert('Error importing data. Please try again.');
+    }
+  };
+
+  const handleClearCache = async () => {
+    try {
+      if (confirm('Are you sure you want to clear all cached data? This action cannot be undone.')) {
+        // Clear localStorage
+        localStorage.clear();
+        
+        // Clear sessionStorage
+        sessionStorage.clear();
+        
+        // Clear any cached data in memory
+        setPreferences({
+          theme: 'system',
+          language: 'en',
+          timezone: 'UTC',
+          notifications: {
+            email: true,
+            push: true,
+            sms: false,
+            tradingAlerts: true,
+            aiInsights: true,
+            systemUpdates: true
+          },
+          privacy: {
+            profileVisibility: 'private',
+            dataSharing: false,
+            analytics: true,
+            marketing: false
+          },
+          trading: {
+            autoAnalysis: true,
+            riskLevel: 'medium',
+            maxDrawdown: 10,
+            positionSizing: 'moderate'
+          }
+        });
+        
+        alert('Cache cleared successfully!');
+      }
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+      alert('Error clearing cache. Please try again.');
+    }
+  };
+
+  const handleDatabaseInfo = async () => {
+    setIsDbModalOpen(true);
+    setDbLoading(true);
+    setDbError(null);
+    setDbInfo(null);
+    try {
+      const response = await api.get('/api/system/database-info');
+      const data = await response.json();
+      if (data?.success) {
+        setDbInfo(data.database || null);
+      } else {
+        setDbError(data?.details || data?.error || 'Unable to fetch database information.');
+      }
+    } catch (error: any) {
+      console.error('Error fetching database info:', error);
+      setDbError(error?.message || 'Error fetching database information.');
+    } finally {
+      setDbLoading(false);
+    }
+  };
 
   async function handleTestConnectivity() {
     setAiTestState('connectivity');
@@ -1379,31 +1516,45 @@ export function Settings() {
         <TabsContent value="advanced" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <SettingsIcon className="w-5 h-5" />
-                Advanced Settings
-              </CardTitle>
-              <CardDescription>
-                Configurări avansate pentru utilizatori experimentați
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <SettingsIcon className="w-5 h-5" />
+                    Advanced Settings
+                  </CardTitle>
+                  <CardDescription>
+                    Configurări avansate pentru utilizatori experimentați
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open('/docs/ADVANCED_SETTINGS.html', '_blank')}
+                  className="flex items-center gap-2"
+                  title="Help with Advanced Settings"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  Help
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <h4 className="font-semibold">Data Management</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Button variant="outline" className="flex items-center gap-2">
+                  <Button variant="outline" className="flex items-center gap-2" onClick={handleExportData}>
                     <Download className="w-4 h-4" />
                     Export Data
                   </Button>
-                  <Button variant="outline" className="flex items-center gap-2">
+                  <Button variant="outline" className="flex items-center gap-2" onClick={handleImportData}>
                     <Upload className="w-4 h-4" />
                     Import Data
                   </Button>
-                  <Button variant="outline" className="flex items-center gap-2">
+                  <Button variant="outline" className="flex items-center gap-2" onClick={handleClearCache}>
                     <Trash2 className="w-4 h-4" />
                     Clear Cache
                   </Button>
-                  <Button variant="outline" className="flex items-center gap-2">
+                  <Button variant="outline" className="flex items-center gap-2" onClick={handleDatabaseInfo}>
                     <Database className="w-4 h-4" />
                     Database Info
                   </Button>
@@ -1463,6 +1614,78 @@ export function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+      {/* Database Info Modal */}
+      <Dialog open={isDbModalOpen} onOpenChange={setIsDbModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Database className="w-5 h-5" />
+              Database Information
+            </DialogTitle>
+            <DialogDescription>
+              Detalii despre conexiunea la baza de date și starea serviciului
+            </DialogDescription>
+          </DialogHeader>
+          {dbLoading && (
+            <div className="p-4 text-sm">Se încarcă informațiile despre baza de date...</div>
+          )}
+          {!dbLoading && dbError && (
+            <div className="p-4 text-sm border rounded-md text-red-600 dark:text-red-300">
+              {dbError}
+            </div>
+          )}
+          {!dbLoading && !dbError && dbInfo && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">Type</div>
+                  <div className="font-semibold">{dbInfo.type || 'PostgreSQL'}</div>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">Version</div>
+                  <div className="font-semibold">{dbInfo.version || 'Unknown'}</div>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">Status</div>
+                  <div className="font-semibold">{dbInfo.status || (dbInfo?.health?.connection ? 'Connected' : 'Disconnected')}</div>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">Response Time</div>
+                  <div className="font-semibold">{typeof dbInfo?.health?.responseTime === 'number' ? `${dbInfo.health.responseTime} ms` : 'n/a'}</div>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">Host</div>
+                  <div className="font-semibold">{dbInfo.host || 'Unknown'}</div>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">Port</div>
+                  <div className="font-semibold">{dbInfo.port || 'Unknown'}</div>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">SSL</div>
+                  <div className="font-semibold">{dbInfo.ssl || 'Disabled'}</div>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="text-sm text-muted-foreground">Last Backup</div>
+                  <div className="font-semibold">{dbInfo.lastBackup || 'Not configured'}</div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open('/docs/ADVANCED_SETTINGS.html#database-info', '_blank')}
+                  className="flex items-center gap-2"
+                  title="Help about Database Info"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  Help
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

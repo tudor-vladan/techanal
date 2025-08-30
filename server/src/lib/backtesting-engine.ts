@@ -1,6 +1,7 @@
 import { getDatabase } from './db';
-import { eq, and, gte, lte, desc, count } from 'drizzle-orm';
+import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import * as schema from '../schema/analysis';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface BacktestResult {
   id: string;
@@ -166,9 +167,17 @@ export class BacktestingEngine {
    * Get backtest results for a user
    */
   async getBacktestResults(userId: string): Promise<BacktestResult[]> {
-    // For now, return empty array since backtestResults table doesn't exist yet
-    // This will be implemented when the table is created
-    return [];
+    if (!this.db) {
+      await this.initializeDatabase();
+    }
+
+    const rows = await this.db
+      .select()
+      .from(schema.backtestResults)
+      .where(eq(schema.backtestResults.userId, userId))
+      .orderBy(desc(schema.backtestResults.createdAt));
+
+    return rows.map((row: any) => this.mapDatabaseResultToBacktestResult(row));
   }
 
   /**
@@ -180,9 +189,23 @@ export class BacktestingEngine {
       return this.resultsCache.get(resultId)!;
     }
 
-    // For now, return null since backtestResults table doesn't exist yet
-    // This will be implemented when the table is created
-    return null;
+    if (!this.db) {
+      await this.initializeDatabase();
+    }
+
+    const rows = await this.db
+      .select()
+      .from(schema.backtestResults)
+      .where(eq(schema.backtestResults.id, resultId))
+      .limit(1);
+
+    if (!rows || rows.length === 0) {
+      return null;
+    }
+
+    const mapped = this.mapDatabaseResultToBacktestResult(rows[0]);
+    this.resultsCache.set(mapped.id, mapped);
+    return mapped;
   }
 
   /**
@@ -507,31 +530,50 @@ export class BacktestingEngine {
   }
 
   private async storeBacktestResult(result: BacktestResult): Promise<void> {
-    // For now, just log the result since backtestResults table doesn't exist yet
-    // This will be implemented when the table is created
-    console.log('Backtest result stored:', result);
+    if (!this.db) {
+      await this.initializeDatabase();
+    }
+
+    await this.db.insert(schema.backtestResults).values({
+      id: result.id,
+      userId: result.userId,
+      startDate: result.startDate,
+      endDate: result.endDate,
+      totalSignals: result.totalSignals,
+      winningSignals: result.winningSignals,
+      losingSignals: result.losingSignals,
+      winRate: String(result.winRate),
+      totalReturn: String(result.totalReturn),
+      maxDrawdown: String(result.maxDrawdown),
+      sharpeRatio: String(result.sharpeRatio),
+      profitFactor: String(result.profitFactor),
+      averageWin: String(result.averageWin),
+      averageLoss: String(result.averageLoss),
+      riskRewardRatio: String(result.riskRewardRatio),
+      metadata: result.metadata,
+    });
   }
 
   private mapDatabaseResultToBacktestResult(dbResult: any): BacktestResult {
     return {
       id: dbResult.id,
       userId: dbResult.userId,
-      startDate: dbResult.startDate,
-      endDate: dbResult.endDate,
+      startDate: new Date(dbResult.startDate),
+      endDate: new Date(dbResult.endDate),
       totalSignals: dbResult.totalSignals,
       winningSignals: dbResult.winningSignals,
       losingSignals: dbResult.losingSignals,
-      winRate: dbResult.winRate,
-      totalReturn: dbResult.totalReturn,
-      maxDrawdown: dbResult.maxDrawdown,
-      sharpeRatio: dbResult.sharpeRatio,
-      profitFactor: dbResult.profitFactor,
-      averageWin: dbResult.averageWin,
-      averageLoss: dbResult.averageLoss,
-      riskRewardRatio: dbResult.riskRewardRatio,
+      winRate: Number(dbResult.winRate),
+      totalReturn: Number(dbResult.totalReturn),
+      maxDrawdown: Number(dbResult.maxDrawdown),
+      sharpeRatio: Number(dbResult.sharpeRatio),
+      profitFactor: Number(dbResult.profitFactor),
+      averageWin: Number(dbResult.averageWin),
+      averageLoss: Number(dbResult.averageLoss),
+      riskRewardRatio: Number(dbResult.riskRewardRatio),
       signals: [], // Will be loaded separately if needed
       metadata: dbResult.metadata,
-      timestamp: dbResult.timestamp
+      timestamp: dbResult.createdAt ? new Date(dbResult.createdAt) : new Date()
     };
   }
 
@@ -608,7 +650,7 @@ export class BacktestingEngine {
   }
 
   private generateId(): string {
-    return `backtest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return uuidv4();
   }
 }
 

@@ -14,6 +14,33 @@ type Subscriber = (event: LiveLogEvent) => void;
 const subscribers = new Set<Subscriber>();
 const ringBuffer: LiveLogEvent[] = [];
 const MAX_BUFFER = 200;
+let ticker: NodeJS.Timeout | null = null;
+
+function startTickerIfNeeded() {
+  if (ticker || subscribers.size === 0) return;
+  // Emit a lightweight info event every second while there are subscribers
+  ticker = setInterval(() => {
+    try {
+      publishLiveEvent({
+        id: `${Date.now()}-tick`,
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'live tick',
+        source: 'system-monitor',
+        details: {
+          uptimeSec: typeof process !== 'undefined' && process.uptime ? Math.floor(process.uptime()) : undefined,
+        },
+      });
+    } catch {}
+  }, 1000);
+}
+
+function stopTickerIfIdle() {
+  if (subscribers.size === 0 && ticker) {
+    clearInterval(ticker);
+    ticker = null;
+  }
+}
 
 export function publishLiveEvent(event: LiveLogEvent) {
   const normalized: LiveLogEvent = {
@@ -41,8 +68,10 @@ export function getRecentEvents(): LiveLogEvent[] {
 
 export function subscribeLiveEvents(handler: Subscriber): () => void {
   subscribers.add(handler);
+  startTickerIfNeeded();
   return () => {
     subscribers.delete(handler);
+    stopTickerIfIdle();
   };
 }
 

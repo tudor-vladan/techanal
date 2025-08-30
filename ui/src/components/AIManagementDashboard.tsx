@@ -25,7 +25,7 @@ import {
   EyeOff,
   Layers
 } from 'lucide-react';
-// import { fetchWithAuth } from '@/lib/serverComm';
+import { fetchWithAuth } from '@/lib/serverComm';
 
 interface AIProvider {
   id: string;
@@ -258,21 +258,45 @@ export function AIManagementDashboard() {
   const handleConfigUpdate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setProviders(prev => prev.map(p => 
-        p.id === selectedProvider 
+      const payload: AIProviderConfig = {
+        provider: selectedProvider as any,
+        apiKey: providerConfig.apiKey,
+        model: providerConfig.model,
+        baseUrl: providerConfig.baseUrl,
+        timeout: providerConfig.timeout,
+        maxTokens: providerConfig.maxTokens,
+        temperature: providerConfig.temperature,
+        isDefault: providerConfig.isDefault,
+      };
+
+      const res = await fetchWithAuth(`/api/ai-management/provider/${encodeURIComponent(selectedProvider)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data?.success) {
+        throw new Error(data?.details || data?.error || 'Failed to update provider configuration');
+      }
+
+      // Optionally set as default
+      if (providerConfig.isDefault) {
+        try {
+          await fetchWithAuth(`/api/ai-management/set-default/${encodeURIComponent(selectedProvider)}`, { method: 'POST' });
+        } catch {}
+      }
+
+      setProviders(prev => prev.map(p =>
+        p.id === selectedProvider
           ? { ...p, ...providerConfig }
           : p
       ));
-      
-      // Show success message
+
       setError(null);
-    } catch (err) {
-      setError('Failed to update provider configuration');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update provider configuration');
     } finally {
       setIsLoading(false);
     }
@@ -281,59 +305,66 @@ export function AIManagementDashboard() {
   const handleTestProvider = useCallback(async (providerId: string) => {
     setIsTesting(true);
     const testId = `test-${Date.now()}`;
-    
+
     const newTest: AIProviderTest = {
       id: testId,
       provider: providerId,
       status: 'running',
       startTime: new Date().toISOString()
     };
-    
+
     setTestResults(prev => [...prev, newTest]);
-    
+
     try {
-      // Simulate API test
-      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
-      
-      const success = Math.random() > 0.2; // 80% success rate
-      
-      setTestResults(prev => prev.map(t => 
-        t.id === testId 
+      // Call dedicated provider test endpoint (no config mutation)
+      const response = await fetchWithAuth(`/api/ai-management/test-provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId }),
+      });
+
+      const data = await response.json();
+
+      const success = !!data?.success;
+      const message = data?.message || data?.error || 'Unknown result';
+
+      setTestResults(prev => prev.map(t =>
+        t.id === testId
           ? {
               ...t,
               status: success ? 'completed' : 'failed',
               endTime: new Date().toISOString(),
               duration: Date.now() - new Date(t.startTime).getTime(),
-              result: success ? { status: 'healthy', responseTime: 1200 + Math.random() * 800 } : null,
-              error: success ? undefined : 'Connection timeout'
+              result: success ? { status: data?.status || 'healthy', details: data?.capabilities } : null,
+              error: success ? undefined : (data?.details || message)
             }
           : t
       ));
-      
-      // Update provider health
+
       if (success) {
-        setProviders(prev => prev.map(p => 
-          p.id === providerId 
-            ? { ...p, health: Math.min(100, p.health + 5), status: 'active' as any }
+        setProviders(prev => prev.map(p =>
+          p.id === providerId
+            ? { ...p, status: 'active' as any, health: Math.min(100, (p.health || 90) + 2), lastUsed: new Date().toISOString() }
             : p
         ));
       }
-    } catch (err) {
-      setTestResults(prev => prev.map(t => 
-        t.id === testId 
+    } catch (err: any) {
+      const message = (err && (err.message || String(err))) || 'Test failed';
+      setTestResults(prev => prev.map(t =>
+        t.id === testId
           ? {
               ...t,
               status: 'failed',
               endTime: new Date().toISOString(),
               duration: Date.now() - new Date(t.startTime).getTime(),
-              error: 'Test failed unexpectedly'
+              error: message
             }
           : t
       ));
     } finally {
       setIsTesting(false);
     }
-  }, []);
+  }, [providerConfig]);
 
   const handleSetDefault = useCallback(async (providerId: string) => {
     try {

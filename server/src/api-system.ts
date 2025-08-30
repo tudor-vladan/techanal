@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createSSEStream, getRecentEvents, publishLiveEvent } from './lib/live-events';
+import { sql } from 'drizzle-orm';
 
 const execAsync = promisify(exec);
 
@@ -14,129 +15,90 @@ export const systemRoutes = new Hono();
 // Apply authentication to all routes
 systemRoutes.use('*', authMiddleware);
 
-// Get system processes
-systemRoutes.get('/processes', async (c) => {
-  try {
-    const processes = await getSystemProcesses();
-    
-    return c.json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      processes
-    });
-  } catch (error) {
-    console.error('System processes error:', error);
-    try {
-      publishLiveEvent({
-        id: `${Date.now()}-sys-proc-error`,
-        level: 'error',
-        message: 'Failed to get system processes',
-        source: 'api-system',
-        timestamp: new Date().toISOString(),
-        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
-      });
-    } catch {}
-    return c.json({
-      error: 'Failed to get system processes',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, 500);
-  }
-});
-
-// Get system resources
-systemRoutes.get('/resources', async (c) => {
-  try {
-    const resources = await getSystemResources();
-    
-    return c.json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      resources
-    });
-  } catch (error) {
-    console.error('System resources error:', error);
-    try {
-      publishLiveEvent({
-        id: `${Date.now()}-sys-res-error`,
-        level: 'error',
-        message: 'Failed to get system resources',
-        source: 'api-system',
-        timestamp: new Date().toISOString(),
-        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
-      });
-    } catch {}
-    return c.json({
-      error: 'Failed to get system resources',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, 500);
-  }
-});
-
-// Get system logs
-systemRoutes.get('/logs', async (c) => {
-  try {
-    const logs = await getSystemLogs();
-    
-    return c.json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      logs
-    });
-  } catch (error) {
-    console.error('System logs error:', error);
-    try {
-      publishLiveEvent({
-        id: `${Date.now()}-sys-logs-error`,
-        level: 'error',
-        message: 'Failed to get system logs',
-        source: 'api-system',
-        timestamp: new Date().toISOString(),
-        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
-      });
-    } catch {}
-    return c.json({
-      error: 'Failed to get system logs',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, 500);
-  }
-});
-
-// Live logs stream via Server-Sent Events
-systemRoutes.get('/logs/stream', async (c) => {
-  // auth applied globally; token may arrive via ?token
-  return createSSEStream();
-});
-
-// Get system metrics
-systemRoutes.get('/metrics', async (c) => {
-  try {
-    const metrics = await getSystemMetrics();
-    
-    return c.json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      metrics
-    });
-  } catch (error) {
-    console.error('System metrics error:', error);
-    try {
-      publishLiveEvent({
-        id: `${Date.now()}-sys-metrics-error`,
-        level: 'error',
-        message: 'Failed to get system metrics',
-        source: 'api-system',
-        timestamp: new Date().toISOString(),
-        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
-      });
-    } catch {}
-    return c.json({
-      error: 'Failed to get system metrics',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, 500);
-  }
-});
-
 // Helper functions
+async function getDatabaseInfo() {
+  try {
+    // Import database functions dynamically to avoid circular dependencies
+    const { getDatabase, testDatabaseConnection } = await import('./lib/db');
+    
+    // Get database connection info
+    const dbUrl = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5502/postgres';
+    const isLocal = dbUrl.includes('localhost');
+    
+    // Test connection health
+    const isHealthy = await testDatabaseConnection();
+    
+    // Get basic database info
+    const dbInfo: any = {
+      type: 'PostgreSQL',
+      version: '15', // Default version, could be made dynamic
+      status: isHealthy ? 'Connected' : 'Disconnected',
+      connections: 'Active',
+      size: 'Unknown', // Could be implemented with actual DB queries
+      lastBackup: 'Not configured',
+      url: isLocal ? 'Local Development Database' : 'Remote Database',
+      host: isLocal ? 'localhost' : 'Remote',
+      port: isLocal ? '5502' : 'Standard',
+      ssl: dbUrl.includes('sslmode=require') ? 'Enabled' : 'Disabled',
+      health: {
+        connection: isHealthy,
+        lastCheck: new Date().toISOString(),
+        responseTime: 0
+      }
+    };
+    
+    // Try to get more detailed info if connected
+    if (isHealthy) {
+      try {
+        const startTime = performance.now();
+        const db = await getDatabase(dbUrl);
+        
+        // Get table count (basic schema info) - simplified approach
+        try {
+          // Use a simple query that should work with both Neon and Postgres
+          const result = await db.execute(sql`SELECT 1 as test`);
+          if (result) {
+            dbInfo.tableCount = 'Available (schema query not implemented)';
+          }
+        } catch (tableError) {
+          console.warn('Could not get table count:', tableError);
+          dbInfo.tableCount = 'Not available';
+        }
+        
+        const endTime = performance.now();
+        dbInfo.health.responseTime = Math.round(endTime - startTime);
+        
+      } catch (dbError) {
+        console.warn('Could not get detailed database info:', dbError);
+        dbInfo.status = 'Connected (Limited Info)';
+      }
+    }
+    
+    return dbInfo;
+  } catch (error) {
+    console.error('Error getting database info:', error);
+    // Return basic info even if there's an error
+    return {
+      type: 'PostgreSQL',
+      version: 'Unknown',
+      status: 'Error',
+      connections: 'Unknown',
+      size: 'Unknown',
+      lastBackup: 'Unknown',
+      url: 'Error retrieving info',
+      host: 'Unknown',
+      port: 'Unknown',
+      ssl: 'Unknown',
+      health: {
+        connection: false,
+        lastCheck: new Date().toISOString(),
+        responseTime: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    };
+  }
+}
+
 async function getSystemProcesses() {
   try {
     // Get Node.js process info
@@ -435,6 +397,157 @@ async function getSystemMetrics() {
     throw error;
   }
 }
+
+// Get system processes
+systemRoutes.get('/processes', async (c) => {
+  try {
+    const processes = await getSystemProcesses();
+    
+    return c.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      processes
+    });
+  } catch (error) {
+    console.error('System processes error:', error);
+    try {
+      publishLiveEvent({
+        id: `${Date.now()}-sys-proc-error`,
+        level: 'error',
+        message: 'Failed to get system processes',
+        source: 'api-system',
+        timestamp: new Date().toISOString(),
+        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
+      });
+    } catch {}
+    return c.json({
+      error: 'Failed to get system processes',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Get system resources
+systemRoutes.get('/resources', async (c) => {
+  try {
+    const resources = await getSystemResources();
+    
+    return c.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      resources
+    });
+  } catch (error) {
+    console.error('System resources error:', error);
+    try {
+      publishLiveEvent({
+        id: `${Date.now()}-sys-res-error`,
+        level: 'error',
+        message: 'Failed to get system resources',
+        source: 'api-system',
+        timestamp: new Date().toISOString(),
+        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
+      });
+    } catch {}
+    return c.json({
+      error: 'Failed to get system resources',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Get system logs
+systemRoutes.get('/logs', async (c) => {
+  try {
+    const logs = await getSystemLogs();
+    
+    return c.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      logs
+    });
+  } catch (error) {
+    console.error('System logs error:', error);
+    try {
+      publishLiveEvent({
+        id: `${Date.now()}-sys-logs-error`,
+        level: 'error',
+        message: 'Failed to get system logs',
+        source: 'api-system',
+        timestamp: new Date().toISOString(),
+        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
+      });
+    } catch {}
+    return c.json({
+      error: 'Failed to get system logs',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Get database information
+systemRoutes.get('/database-info', async (c) => {
+  try {
+    const dbInfo = await getDatabaseInfo();
+    
+    return c.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      database: dbInfo
+    });
+  } catch (error) {
+    console.error('Database info error:', error);
+    try {
+      publishLiveEvent({
+        id: `${Date.now()}-sys-db-info-error`,
+        level: 'error',
+        message: 'Failed to get database information',
+        source: 'api-system',
+        timestamp: new Date().toISOString(),
+        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
+      });
+    } catch {}
+    return c.json({
+      error: 'Failed to get database information',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Live logs stream via Server-Sent Events
+systemRoutes.get('/logs/stream', async (c) => {
+  // auth applied globally; token may arrive via ?token
+  return createSSEStream();
+});
+
+// Get system metrics
+systemRoutes.get('/metrics', async (c) => {
+  try {
+    const metrics = await getSystemMetrics();
+    
+    return c.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      metrics
+    });
+  } catch (error) {
+    console.error('System metrics error:', error);
+    try {
+      publishLiveEvent({
+        id: `${Date.now()}-sys-metrics-error`,
+        level: 'error',
+        message: 'Failed to get system metrics',
+        source: 'api-system',
+        timestamp: new Date().toISOString(),
+        details: error instanceof Error ? { message: error.message, stack: error.stack } : { error }
+      });
+    } catch {}
+    return c.json({
+      error: 'Failed to get system metrics',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
 
 // Utility functions
 function formatUptime(seconds: number): string {

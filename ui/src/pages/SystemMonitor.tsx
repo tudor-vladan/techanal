@@ -26,6 +26,7 @@ import HelpSystem from '@/components/HelpSystem';
 import { SystemCharts } from '@/components/SystemCharts';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, AreaChart, Area } from 'recharts';
 import { fetchWithAuth, getAIEngineStats, API_BASE_URL, getLocalAuthToken } from '@/lib/serverComm';
+import { NotificationCenter } from '@/components/NotificationCenter';
 
 import type { BusinessIntelligencePeriod, BusinessIntelligenceFormat } from '@/lib/serverComm';
 import { getBusinessIntelligenceReportHistory, exportBusinessIntelligenceReport, downloadFileByUrl } from '@/lib/serverComm';
@@ -105,6 +106,12 @@ export default function SystemMonitor() {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveLogEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
+  const [lastHeartbeatAt, setLastHeartbeatAt] = useState<number | null>(null);
+  const [heartbeatStatus, setHeartbeatStatus] = useState<'ok' | 'late' | 'lost'>('lost');
+  const [heartbeatUptimeSec, setHeartbeatUptimeSec] = useState<number | null>(null);
+
+  const HEARTBEAT_WARN_MS = 8000;
+  const HEARTBEAT_LOST_MS = 15000;
 
   // Reports state
   const [reportPeriod, setReportPeriod] = useState<BusinessIntelligencePeriod>('monthly');
@@ -151,6 +158,17 @@ export default function SystemMonitor() {
     memory: number;
     disk: number;
     network: number;
+  }>>([]);
+  const [externalNotifications, setExternalNotifications] = useState<Array<{
+    id?: string;
+    type: 'info' | 'warning' | 'error' | 'success' | 'critical';
+    title: string;
+    message: string;
+    timestamp?: string;
+    source?: string;
+    priority?: 'low' | 'medium' | 'high' | 'urgent';
+    actionRequired?: boolean;
+    category?: 'system' | 'security' | 'performance' | 'maintenance';
   }>>([]);
 
   // Optimizat cu useMemo pentru a evita recalcularea la fiecare render
@@ -493,6 +511,14 @@ export default function SystemMonitor() {
               details: data.details,
             } as LiveLogEvent;
             setLiveEvents(prev => [event, ...prev].slice(0, 500));
+            // Track server heartbeat ticks
+            if ((event.message || '').toLowerCase() === 'live tick') {
+              const ts = Date.parse(event.timestamp) || Date.now();
+              setLastHeartbeatAt(ts);
+              if (event.details && typeof event.details.uptimeSec === 'number') {
+                setHeartbeatUptimeSec(event.details.uptimeSec);
+              }
+            }
           } catch {}
         };
         es.onerror = () => {
@@ -518,6 +544,77 @@ export default function SystemMonitor() {
       esRef.current = null;
     };
   }, [fetchSystemData]);
+
+  // Derive heartbeat status from last tick time
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (!lastHeartbeatAt) {
+        setHeartbeatStatus('lost');
+        // push a notification if not already pushed recently
+        setExternalNotifications(prev => {
+          const already = prev.find(n => n.title === 'Heartbeat Lost');
+          if (already) return prev;
+          return [{
+            id: `heartbeat-lost-${Date.now()}`,
+            type: 'critical',
+            title: 'Heartbeat Lost',
+            message: 'No heartbeat detected in the last 15s. Live stream may be disconnected.',
+            source: 'system-monitor',
+            priority: 'urgent',
+            actionRequired: true,
+            category: 'system'
+          }, ...prev];
+        });
+        return;
+      }
+      const age = now - lastHeartbeatAt;
+      if (age > HEARTBEAT_LOST_MS) {
+        if (heartbeatStatus !== 'lost') {
+          setExternalNotifications(prev => [{
+            id: `heartbeat-lost-${Date.now()}`,
+            type: 'critical',
+            title: 'Heartbeat Lost',
+            message: 'No heartbeat detected in the last 15s. Live stream may be disconnected.',
+            source: 'system-monitor',
+            priority: 'urgent',
+            actionRequired: true,
+            category: 'system'
+          }, ...prev]);
+        }
+        setHeartbeatStatus('lost');
+      } else if (age > HEARTBEAT_WARN_MS) {
+        if (heartbeatStatus !== 'late') {
+          setExternalNotifications(prev => [{
+            id: `heartbeat-late-${Date.now()}`,
+            type: 'warning',
+            title: 'Heartbeat Late',
+            message: 'Heartbeat delayed (>8s). Monitoring stream may be unstable.',
+            source: 'system-monitor',
+            priority: 'high',
+            actionRequired: false,
+            category: 'system'
+          }, ...prev]);
+        }
+        setHeartbeatStatus('late');
+      } else {
+        if (heartbeatStatus !== 'ok') {
+          setExternalNotifications(prev => [{
+            id: `heartbeat-restored-${Date.now()}`,
+            type: 'success',
+            title: 'Heartbeat Restored',
+            message: 'Live heartbeat signal is healthy again.',
+            source: 'system-monitor',
+            priority: 'medium',
+            actionRequired: false,
+            category: 'system'
+          }, ...prev]);
+        }
+        setHeartbeatStatus('ok');
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lastHeartbeatAt]);
 
   // Optimizat cu useCallback pentru a evita recrearea la fiecare render
   const toggleMonitoring = useCallback(() => {
@@ -745,6 +842,12 @@ export default function SystemMonitor() {
         </div>
         <div className="flex items-center gap-3">
           <HelpSystem feature="system-monitor" variant="outline" size="sm" />
+          <div className="flex items-center gap-2 text-sm">
+            <div className={`w-2 h-2 rounded-full ${heartbeatStatus === 'ok' ? 'bg-green-500' : heartbeatStatus === 'late' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+            <span className="text-muted-foreground">
+              {heartbeatStatus === 'ok' ? 'Heartbeat OK' : heartbeatStatus === 'late' ? 'Heartbeat late' : 'Heartbeat lost'}
+            </span>
+          </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
             {isMonitoring ? 'Monitorizare activă (10s)' : 'Monitorizare oprită'}
@@ -778,6 +881,13 @@ export default function SystemMonitor() {
       </div>
 
       {/* Status banner */}
+      {heartbeatStatus === 'lost' && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>
+            No heartbeat detected in the last 15s. Live monitoring stream may be disconnected.
+          </AlertDescription>
+        </Alert>
+      )}
       {dbHealthy === false && (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>
@@ -793,6 +903,10 @@ export default function SystemMonitor() {
 
       {/* System Status Overview */}
       <div className="mb-6">
+        {/* Notification bell with external events (includes heartbeat) */}
+        <div className="mb-3 flex justify-end">
+          <NotificationCenter isMonitoring={isMonitoring} resources={resources} externalEvents={externalNotifications} />
+        </div>
         <Card className={`${statCardClass} ${ringForPercentLoad(resources?.cpu.usage ?? 0)}`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

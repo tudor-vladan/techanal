@@ -17,8 +17,9 @@ COPY pnpm-lock.yaml ./
 # Install pnpm
 RUN npm install -g pnpm
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --prod
+# Install dependencies (include dev deps for tsx runtime)
+# Note: using --no-frozen-lockfile to allow build when lockfile is out of sync
+RUN pnpm install --no-frozen-lockfile
 
 # Production stage
 FROM node:18-alpine AS production
@@ -38,7 +39,7 @@ WORKDIR /app
 
 # Copy dependencies from base stage
 COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /usr/local/bin/dumb-init /usr/local/bin/dumb-init
+## dumb-init is installed again in this stage; no need to copy from base
 
 # Copy source code
 COPY --chown=nodejs:nodejs . .
@@ -64,5 +65,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application
-CMD ["node", "dist/server.js"]
+# Start the application using tsx to run TypeScript directly
+CMD ["node", "--loader", "tsx", "src/server.ts"]

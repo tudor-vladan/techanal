@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import {
   Plus,
   X
 } from 'lucide-react';
+import { pwaManager } from '@/lib/pwa-manager';
 
 interface AnalysisResult {
   id: string;
@@ -51,6 +52,7 @@ export function AnalysisComparison({
 }: AnalysisComparisonProps) {
   const [selectedAnalyses, setSelectedAnalyses] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'side-by-side' | 'overlay' | 'summary'>('side-by-side');
+  const [isSharing, setIsSharing] = useState(false);
 
   const handleAnalysisToggle = (analysisId: string) => {
     setSelectedAnalyses(prev => 
@@ -83,6 +85,30 @@ export function AnalysisComparison({
     if (confidence >= 60) return 'text-yellow-600';
     return 'text-red-600';
   };
+
+  const handleShareResults = useCallback(async () => {
+    const selected = analyses.filter(a => selectedAnalyses.includes(a.id));
+    if (selected.length === 0) return;
+
+    const title = 'TechAnal - Analysis Comparison';
+    const text = `Comparație pentru ${selected.length} analize (${selected.map(a => a.recommendation).join(', ')})`;
+    const url = window.location.href;
+
+    try {
+      setIsSharing(true);
+      const ok = await pwaManager.shareData({ title, text, url });
+      if (ok) return;
+    } catch {}
+    finally {
+      setIsSharing(false);
+    }
+
+    try {
+      await navigator.clipboard?.writeText(`${title}: ${url}`);
+    } catch {}
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+    window.open(tgUrl, '_blank', 'noopener,noreferrer');
+  }, [analyses, selectedAnalyses]);
 
   const renderSideBySideView = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -396,9 +422,15 @@ export function AnalysisComparison({
                   <Download className="w-4 h-4" />
                   Export Comparison
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleShareResults}
+                  disabled={isSharing}
+                  className="flex items-center gap-2"
+                >
                   <Share2 className="w-4 h-4" />
-                  Share Results
+                  {isSharing ? 'Sharing…' : 'Share Results'}
                 </Button>
               </div>
               

@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 import { 
   Brain, 
   // Zap, 
@@ -49,6 +51,19 @@ import {
   // Target as TargetIcon,
   // TrendingDown,
   // Activity as ActivityIcon
+  X,
+  Calendar,
+  Clock,
+  TrendingUp,
+  BarChart3,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Network,
+  Monitor,
+  Gauge,
+  Info,
+  HelpCircle
 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/serverComm';
 
@@ -130,6 +145,8 @@ export function ModelManagementDashboard() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedModelForView, setSelectedModelForView] = useState<Model | null>(null);
 
   // Mock data pentru demo
   const mockModels: Model[] = [
@@ -435,6 +452,16 @@ export function ModelManagementDashboard() {
   //   models.find(m => m.name === selectedModel), [models, selectedModel]
   // );
 
+  const openViewModal = useCallback(() => {
+    setSelectedModelForView(models.find(m => m.name === selectedModel) || null);
+    setIsViewModalOpen(true);
+  }, [selectedModel, models]);
+
+  const closeViewModal = useCallback(() => {
+    setIsViewModalOpen(false);
+    setSelectedModelForView(null);
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -546,7 +573,7 @@ export function ModelManagementDashboard() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={(e) => { e.stopPropagation(); setSelectedModel(model.name); }}
+                        onClick={(e) => { e.stopPropagation(); setSelectedModelForView(model); setIsViewModalOpen(true); }}
                         disabled={isTraining}
                       >
                         <Eye className="w-4 h-4" />
@@ -876,6 +903,185 @@ export function ModelManagementDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Detailed Model View Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+                  {selectedModelForView?.name && (
+                    <>
+                      <Brain className="w-8 h-8 text-blue-600" />
+                      {selectedModelForView.name}
+                    </>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="text-lg">
+                  Detailed model information and performance metrics
+                </DialogDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={closeViewModal}
+                className="h-8 w-8 p-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+
+          {selectedModelForView && (
+            <div className="space-y-6">
+              {/* Model Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Info className="w-5 h-5" />
+                      Model Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Type</div>
+                        <Badge variant={selectedModelForView.type === 'base-model' ? 'default' : 'secondary'}>
+                          {selectedModelForView.type}
+                        </Badge>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Status</div>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded-full ${getStatusColor(selectedModelForView.status)}`}></div>
+                          <span className="capitalize">{selectedModelForView.status}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Version</div>
+                        <div className="font-medium">{selectedModelForView.currentVersion}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Last Training</div>
+                        <div className="font-medium">{selectedModelForView.lastTraining}</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5" />
+                      Performance Metrics
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Accuracy</span>
+                          <span>{(selectedModelForView.accuracy * 100).toFixed(1)}%</span>
+                        </div>
+                        <Progress value={selectedModelForView.accuracy * 100} className="h-2" />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Response Time</span>
+                          <span>{selectedModelForView.responseTime}ms</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full" 
+                            style={{ width: `${Math.min((selectedModelForView.responseTime / 500) * 100, 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="text-muted-foreground">Training Data Size</div>
+                        <div className="font-medium">{selectedModelForView.trainingDataSize.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Model Type</div>
+                        <div className="font-medium capitalize">{selectedModelForView.type.replace('-', ' ')}</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Model Versions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Layers className="w-5 h-5" />
+                    Model Versions
+                  </CardTitle>
+                  <CardDescription>
+                    Historical versions and their performance
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {modelVersions.length > 0 ? (
+                    <div className="space-y-3">
+                      {modelVersions.slice(0, 5).map((version) => (
+                        <div key={version.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm font-medium">v{version.version}</div>
+                            <Badge variant={version.status === 'active' ? 'default' : 'secondary'}>
+                              {version.status}
+                            </Badge>
+                            <div className="text-sm text-muted-foreground">
+                              {(version.accuracy * 100).toFixed(1)}% accuracy
+                            </div>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {version.trainingDate.toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4">
+                      No version history available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Help Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <HelpCircle className="w-5 h-5" />
+                    Need Help?
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-muted-foreground">
+                    <p className="mb-2">
+                      This dashboard provides comprehensive information about your AI models including:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 ml-4">
+                      <li>Performance metrics and accuracy scores</li>
+                      <li>Training history and version management</li>
+                      <li>Real-time status monitoring</li>
+                      <li>Fine-tuning configuration options</li>
+                    </ul>
+                    <p className="mt-3">
+                      For technical support or questions about model performance, please contact your system administrator.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

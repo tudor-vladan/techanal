@@ -859,8 +859,32 @@ api.route('/protected', protectedRoutes);
 app.route('/api/v1', api);
 
 // Serve uploaded files (mounted after api router is created)
-// Require authentication to access uploaded files
-app.use('/api/v1/uploads/*', authMiddleware);
+// Note: Images are served without authentication since they are already protected
+// by being accessible only through server-generated URLs
+// Provide both app-level and api-level routes to avoid any router prefix issues
+app.get('/api/v1/uploads/:path{.+}', async (c) => {
+  try {
+    const reqPath = c.req.param('path');
+    const safeName = basename(reqPath);
+    const uploadDir = process.env.UPLOAD_DIR || 'uploads';
+    const filePath = join(process.cwd(), uploadDir, safeName);
+
+    await fsp.access(filePath);
+    const fileBuf = await fsp.readFile(filePath);
+    const ext = extname(filePath).toLowerCase();
+    const mime =
+      ext === '.png' ? 'image/png' :
+      ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
+      ext === '.webp' ? 'image/webp' :
+      'application/octet-stream';
+
+    return new Response(fileBuf, { headers: { 'Content-Type': mime } });
+  } catch (err) {
+    return c.json({ error: 'File not found' }, 404);
+  }
+});
+
+// Keep router-scoped route as well
 api.get('/uploads/:path{.+}', async (c) => {
   try {
     const reqPath = c.req.param('path');

@@ -136,35 +136,77 @@ aiManagementRoutes.post('/test-provider', async (c) => {
       return c.json({ success: false, error: 'Provider ID is required' }, 400);
     }
 
+    const pid = String(providerId).toLowerCase();
+
+    // Fast path for mock provider
+    if (pid === 'mock') {
+      return c.json({
+        success: true,
+        message: 'Provider mock is healthy',
+        provider: 'mock',
+        status: 'healthy',
+        capabilities: ['mock-analysis', 'development-testing']
+      });
+    }
+
+    // Validate required environment for each provider to avoid 500s
+    if (pid === 'ollama') {
+      const baseUrl = getEnv('OLLAMA_BASE_URL');
+      if (!baseUrl) {
+        return c.json({ success: false, error: 'OLLAMA_BASE_URL is not set' }, 400);
+      }
+    }
+    if (pid === 'openai') {
+      const apiKey = getEnv('OPENAI_API_KEY');
+      if (!apiKey) {
+        return c.json({ success: false, error: 'OPENAI_API_KEY is not set' }, 400);
+      }
+    }
+    if (pid === 'anthropic') {
+      const apiKey = getEnv('ANTHROPIC_API_KEY');
+      if (!apiKey) {
+        return c.json({ success: false, error: 'ANTHROPIC_API_KEY is not set' }, 400);
+      }
+    }
+
     // Create test configuration
     const testConfig: AIServiceConfig = {
-      provider: providerId as any,
-      apiKey: getEnv(`${providerId.toUpperCase()}_API_KEY`),
-      model: getEnv(`${providerId.toUpperCase()}_MODEL`),
-      baseUrl: getEnv(`${providerId.toUpperCase()}_BASE_URL`),
-      timeout: parseInt(getEnv(`${providerId.toUpperCase()}_TIMEOUT`) ?? '30000'),
-      maxTokens: parseInt(getEnv(`${providerId.toUpperCase()}_MAX_TOKENS`) ?? '1000')
+      provider: pid as any,
+      apiKey: getEnv(`${pid.toUpperCase()}_API_KEY`),
+      model: getEnv(`${pid.toUpperCase()}_MODEL`),
+      baseUrl: getEnv(`${pid.toUpperCase()}_BASE_URL`),
+      timeout: parseInt(getEnv(`${pid.toUpperCase()}_TIMEOUT`) ?? '30000'),
+      maxTokens: parseInt(getEnv(`${pid.toUpperCase()}_MAX_TOKENS`) ?? '1000')
     };
 
-    // Test the provider
-    const service = AIServiceFactory.createService(testConfig);
-    const isHealthy = await service.healthCheck();
+    try {
+      // Test the provider
+      const service = AIServiceFactory.createService(testConfig);
+      const isHealthy = await service.healthCheck();
 
-    if (isHealthy) {
-      return c.json({ 
-        success: true, 
-        message: `Provider ${providerId} is healthy`,
-        provider: providerId,
-        status: 'healthy',
-        capabilities: service.getCapabilities()
-      });
-    } else {
-      return c.json({ 
-        success: false, 
-        message: `Provider ${providerId} health check failed`,
-        provider: providerId,
-        status: 'unhealthy'
-      }, 400);
+      if (isHealthy) {
+        return c.json({ 
+          success: true, 
+          message: `Provider ${pid} is healthy`,
+          provider: pid,
+          status: 'healthy',
+          capabilities: service.getCapabilities()
+        });
+      } else {
+        return c.json({ 
+          success: false, 
+          message: `Provider ${pid} health check failed`,
+          provider: pid,
+          status: 'unhealthy'
+        }, 400);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Convert common configuration errors to 400s for clarity
+      if (/required/i.test(msg) || /not set/i.test(msg)) {
+        return c.json({ success: false, error: msg }, 400);
+      }
+      return c.json({ success: false, error: 'Failed to test provider', details: msg }, 500);
     }
   } catch (error) {
     return c.json({ 

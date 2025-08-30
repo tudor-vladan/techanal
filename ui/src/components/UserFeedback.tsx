@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { fetchWithAuth } from '@/lib/serverComm';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -75,8 +76,8 @@ export const UserFeedback: React.FC<UserFeedbackProps> = ({
         metadata
       };
 
-      // Submit feedback to API
-      const response = await fetch('/api/learning/feedback', {
+      // Submit feedback to API (uses base URL + auth in dev/prod)
+      const response = await fetchWithAuth('/api/learning/feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
